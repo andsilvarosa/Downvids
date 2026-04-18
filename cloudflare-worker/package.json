@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler pages dev dist",
+    "build": "esbuild src/index.ts --bundle --format=esm --outfile=dist/_worker.js",
+    "deploy": "wrangler pages deploy dist",
     "db:init": "wrangler d1 execute video-downloader-db --local --file=./schema.sql",
     "db:prod": "wrangler d1 execute video-downloader-db --remote --file=./schema.sql"
   },
@@ -14,6 +15,7 @@
   "devDependencies": {
     "wrangler": "^3.0.0",
     "@cloudflare/workers-types": "^4.20240405.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "esbuild": "^0.20.2"
   }
 }
