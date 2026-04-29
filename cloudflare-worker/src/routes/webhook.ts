@@ -43,10 +43,10 @@ webhookRoute.post('/', async (c) => {
 
   await bot.sendMessage(chatId, '⏳ Baixando e processando mídia...');
 
-  const mediaUrl = await getDirectMediaUrl(targetUrl, c.env);
+  const { url: mediaUrl, debugInfo } = await getDirectMediaUrl(targetUrl, c.env);
 
   if (!mediaUrl) {
-    await bot.sendMessage(chatId, '❌ Ops! Falha ao extrair vídeo deste link. O conteúdo pode ser privado ou não suportado.');
+    await bot.sendMessage(chatId, `❌ Ops! Falha ao extrair vídeo deste link. O conteúdo pode ser privado ou não suportado.\n\n🛠 *Log de Debug:*\n\`\`\`${debugInfo}\`\`\``, { parse_mode: 'Markdown' });
     return c.text('OK');
   }
 
