@@ -14,12 +14,19 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     for (const endpoint of endpoints) {
       try {
         appendDebug(`Tentando endpoints: ${endpoint}`);
-        const res = await fetch(`https://${host}${endpoint}?url=${encodeURIComponent(url)}`, {
+        // Usar POST para /all ou se for o host que o usuário indicou
+        const isPost = endpoint === '/all' || endpoint === '/main';
+        const fetchUrl = `https://${host}${endpoint}`;
+        
+        const res = await fetch(isPost ? fetchUrl : `${fetchUrl}?url=${encodeURIComponent(url)}`, {
+          method: isPost ? 'POST' : 'GET',
           headers: {
             'X-RapidAPI-Key': env.RAPIDAPI_KEY,
             'X-RapidAPI-Host': host,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            ...(isPost ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {})
+          },
+          ...(isPost ? { body: `url=${encodeURIComponent(url)}&cookies=&cookies_file=` } : {})
         });
         if (res.ok) {
           const data: any = await res.json();

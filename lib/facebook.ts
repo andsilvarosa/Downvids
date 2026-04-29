@@ -10,9 +10,25 @@ export interface FacebookVideoInfo {
 }
 
 export async function downloadFacebookVideo(videoUrl: string): Promise<FacebookVideoInfo> {
+  // Strategy 1: Our internal API (which uses the new RapidAPI)
+  try {
+    const res = await fetch("/api/download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: videoUrl })
+    });
+    
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.error("Internal API failed", e);
+  }
+
+  // Fallback to original client-side logic if internal API fails
   const encUrl = encodeURIComponent(videoUrl);
   
-  // Strategy 1: Vreden API (trying common working endpoints)
+  // Strategy 1: Vreden API
   try {
     const res = await fetch(`https://api.vreden.web.id/api/fbdl?url=${encUrl}`);
     if (res.ok) {
