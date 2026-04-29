@@ -2,6 +2,15 @@ import { Bindings } from '../types';
 import { detectPlatform } from '../utils/url-parser';
 
 export async function getDirectMediaUrl(url: string, env: Bindings): Promise<string | null> {
+  // Limpar a URL (remover parâmetros de rastreamento como ?si=...)
+  try {
+    const urlObj = new URL(url);
+    if (!urlObj.hostname.includes('facebook.com')) { // FB costuma precisar de params
+      urlObj.search = '';
+    }
+    url = urlObj.toString();
+  } catch (e) {}
+
   const platform = detectPlatform(url);
 
   // 1. TikTok Especializado (Gratuito sem Auth)
@@ -72,33 +81,52 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<str
   try {
     console.log(`[Downloader] Tentando Fallback Cobalt para: ${url}`);
     
-    // Instâncias públicas v10 do Cobalt
+    // Lista expandida de instâncias do Cobalt para maior redundância
     const cobaltInstances = [
+      'https://cobalt.api.unv.is/',
       'https://co.wuk.sh/',
-      'https://api.cobalt.tools/'
+      'https://api.cobalt.tools/',
+      'https://cobalt.sh/',
+      'https://cobalt.v06.re/',
+      'https://cobalt.perv.cat/'
     ];
 
     for (const apiUrl of cobaltInstances) {
       try {
+        console.log(`[Downloader] Testando instância: ${apiUrl}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
+
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
           },
           body: JSON.stringify({
-            url: url
-          })
+            url: url,
+            vQuality: "720", // 720p é mais seguro para o limite de 50MB do Telegram
+            filenameStyle: "pretty"
+          }),
+          signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) continue;
+
         const data: any = await response.json();
         
-        // Cobalt v10 retorna 'url'
-        if (response.ok && data && data.url) {
-          return data.url;
+        // Suporte para versões variadas do Cobalt (v7, v10, etc)
+        const resultUrl = data.url || (data.picker && data.picker[0]?.url) || data.link;
+        
+        if (resultUrl) {
+          console.log(`[Downloader] Sucesso com Cobalt na instância ${apiUrl}`);
+          return resultUrl;
         }
       } catch (e) {
-        // Ignora erro de instância individual e tenta a próxima
+        console.warn(`[Downloader] Falha na instância ${apiUrl}:`, e);
       }
     }
   } catch (error) {

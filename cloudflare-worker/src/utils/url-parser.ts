@@ -4,9 +4,11 @@ export function extractUrls(text: string): string[] {
 }
 
 export function detectPlatform(url: string): string {
-  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
-  if (url.includes('tiktok.com') || url.includes('vm.tiktok.com')) return 'tiktok';
-  if (url.includes('instagram.com')) return 'instagram';
-  if (url.includes('facebook.com') || url.includes('fb.watch')) return 'facebook';
+  const lowUrl = url.toLowerCase();
+  if (lowUrl.includes('youtube.com') || lowUrl.includes('youtu.be')) return 'youtube';
+  if (lowUrl.includes('tiktok.com')) return 'tiktok';
+  if (lowUrl.includes('instagram.com') || lowUrl.includes('instagr.am')) return 'instagram';
+  if (lowUrl.includes('twitter.com') || lowUrl.includes('x.com')) return 'twitter';
+  if (lowUrl.includes('facebook.com') || lowUrl.includes('fb.watch') || lowUrl.includes('fb.com')) return 'facebook';
   return 'unknown';
 }
