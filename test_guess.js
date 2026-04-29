@@ -3,9 +3,18 @@ const host = "social-media-video-downloader.p.rapidapi.com";
 const url = "https://www.tiktok.com/@mrbeast/video/7338573278546562337";
 
 async function testRapid() {
-  const endpoints = ['/smvd/get/all', '/get/video', '/', '/api/v1/dl', '/alldownloads', '/snaptik/video', '/tiktok/video', '/social/video', '/api/v1/social/download', '/twitter/video', '/instagram/video'];
+  const eps = [
+    '/apidownloader/api/v1/tiktok/video',
+    '/apidownloader/api/v1/social/video',
+    '/v1/video',
+    '/twitter/video',
+    '/api/v1/dl',
+    '/api/v1/download',
+    '/social',
+    '/smvd/video'
+  ];
   
-  for (const ep of endpoints) {
+  for (const ep of eps) {
     let uri = `https://${host}${ep}?url=${encodeURIComponent(url)}&link=${encodeURIComponent(url)}`;
     const options = {
       method: 'GET',

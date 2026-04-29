@@ -80,21 +80,43 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         if (r_url) return { url: r_url, debugInfo: debugLog };
       }
       
-      // Tentativa 2 com outra API pública se a Tikwm falhar
-      if (data?.code === -1) {
-          appendDebug('Tikwm retornou -1. Tentando API alternativa (aemt)...');
-          const altRes = await fetch(`https://aemt.me/download/tiktok?url=${encodeURIComponent(fullUrl)}`);
-          if (altRes.ok) {
-            const altData: any = await altRes.json();
-            if (altData && altData.status && altData.result?.play) {
-               appendDebug('Aemt API sucesso.');
-               return { url: altData.result.play, debugInfo: debugLog };
-            }
-          }
+      // Tentativa 2 com outra API pública (Lovetik)
+      appendDebug('Tentando API alternativa (Lovetik)...');
+      const altRes = await fetch('https://lovetik.com/api/ajax/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'User-Agent': 'Mozilla/5.0' },
+        body: `query=${encodeURIComponent(fullUrl)}`
+      });
+      if (altRes.ok) {
+        const altData: any = await altRes.json();
+        if (altData && altData.status === 'ok' && altData.links && altData.links.length > 0) {
+           // Encontrar o link MP4 HD ou o primeiro disponível (watermark free)
+           let bestLink = altData.links.find((l: any) => l.a && l.t.includes('MP4') && !l.s?.includes('Watermarked'));
+           if (!bestLink) bestLink = altData.links[0];
+           appendDebug(`Lovetik API sucesso: ${JSON.stringify(bestLink).substring(0, 50)}`);
+           return { url: bestLink.a, debugInfo: debugLog };
+        }
+      } else {
+         appendDebug(`Lovetik API HTTP erro: ${altRes.status}`);
       }
-
+      
+      // Tentativa 3: TiklyDown
+      appendDebug('Tentando TiklyDown...');
+      const tiklyRes = await fetch(`https://api.tiklydown.eu.org/api/download?url=${encodeURIComponent(fullUrl)}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (tiklyRes.ok) {
+          const tiklyData: any = await tiklyRes.json();
+          if (tiklyData && tiklyData.video && tiklyData.video.noWatermark) {
+              appendDebug('TiklyDown OK.');
+              return { url: tiklyData.video.noWatermark, debugInfo: debugLog };
+          }
+      } else {
+         appendDebug(`TiklyDown HTTP erro: ${tiklyRes.status}`);
+      }
+      
     } catch (e: any) {
-      appendDebug(`Tikwm err: ${e.message}`);
+      appendDebug(`Tikwm/Lovetik/Tikly err: ${e.message}`);
     }
   }
 
