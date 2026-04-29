@@ -50,11 +50,27 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
 
   const platform = detectPlatform(url);
 
+  // Helper para expandir URL curta
+  async function expandUrl(targetUrl: string): Promise<string> {
+    try {
+      if (targetUrl.includes('vt.tiktok.com') || targetUrl.includes('vm.tiktok.com')) {
+        appendDebug(`Fazendo fetch de expansão em ${targetUrl}...`);
+        const res = await fetch(targetUrl, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0' } });
+        appendDebug(`Expandida para: ${res.url}`);
+        return res.url;
+      }
+    } catch(e: any) {
+      appendDebug(`Falha ao expandir URL: ${e.message}`);
+    }
+    return targetUrl;
+  }
+
   // 2. TikTok Especializado
   if (platform === 'tiktok') {
     try {
-      appendDebug('Tentando Tikwm...');
-      const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, {
+      const fullUrl = await expandUrl(url);
+      appendDebug(`Tentando Tikwm com URL: ${fullUrl}`);
+      const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(fullUrl)}`, {
         headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }
       });
       const data: any = await res.json();
@@ -63,6 +79,20 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         let r_url = data.data.play || data.data.wmplay;
         if (r_url) return { url: r_url, debugInfo: debugLog };
       }
+      
+      // Tentativa 2 com outra API pública se a Tikwm falhar
+      if (data?.code === -1) {
+          appendDebug('Tikwm retornou -1. Tentando API alternativa (aemt)...');
+          const altRes = await fetch(`https://aemt.me/download/tiktok?url=${encodeURIComponent(fullUrl)}`);
+          if (altRes.ok) {
+            const altData: any = await altRes.json();
+            if (altData && altData.status && altData.result?.play) {
+               appendDebug('Aemt API sucesso.');
+               return { url: altData.result.play, debugInfo: debugLog };
+            }
+          }
+      }
+
     } catch (e: any) {
       appendDebug(`Tikwm err: ${e.message}`);
     }
@@ -72,11 +102,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   try {
     const cobaltInstances = [
       'https://cobalt.api.unv.is/',
-      'https://co.wuk.sh/',
-      'https://api.cobalt.tools/',
-      'https://cobalt.sh/',
-      'https://cobalt.v06.re/',
-      'https://cobalt.perv.cat/'
+      'https://api.cobalt.tools/'
     ];
 
     appendDebug('Tentando Cobalt...');
@@ -86,7 +112,10 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000); 
 
-        const response = await fetch(apiUrl, {
+        const isV10 = apiUrl === 'https://api.cobalt.tools/';
+        const reqUrl = isV10 ? apiUrl : apiUrl + 'api/json';
+
+        const response = await fetch(reqUrl, {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
@@ -114,6 +143,8 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         if (resultUrl) {
           appendDebug(`Cobalt OK: ${apiUrl}`);
           return { url: resultUrl, debugInfo: debugLog };
+        } else {
+           appendDebug(`Resposta Cobalt inválida: ${JSON.stringify(data).substring(0,50)}`);
         }
       } catch (e: any) {
          appendDebug(`Cobalt falhou em ${apiUrl}.`);
