@@ -1,6 +1,6 @@
 {
-  "name": "Telegram Downloader Bot",
-  "description": "Uma API Cloudflare Worker em TS para bot do Telegram que faz download de vídeos.",
+  "name": "FB Save - Facebook Video Downloader",
+  "description": "Ferramenta moderna e rápida para baixar vídeos, Reels e fotos do Facebook em alta qualidade.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
