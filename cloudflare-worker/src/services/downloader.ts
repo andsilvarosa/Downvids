@@ -4,26 +4,33 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<str
   // 1. Tentar RapidAPI se chaves foram preenchidas no env
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
     try {
-      const res = await fetch(`https://${env.RAPIDAPI_HOST}/download?url=${encodeURIComponent(url)}`, {
+      console.log(`[Downloader] Tentando RapidAPI para: ${url}`);
+      // Alguns provedores usam /main ou /json, vamos tentar o padrão /main que é comum nesse host
+      const res = await fetch(`https://${env.RAPIDAPI_HOST}/main?url=${encodeURIComponent(url)}`, {
         headers: {
           'X-RapidAPI-Key': env.RAPIDAPI_KEY,
           'X-RapidAPI-Host': env.RAPIDAPI_HOST
         }
       });
+      
+      const data: any = await res.json();
+      console.log('[Downloader] Resposta RapidAPI:', JSON.stringify(data));
+
       if (res.ok) {
-        const data: any = await res.json();
-        // A chave '.video_url' varia conforme o provedor exato na RapidAPI (ajuste se necessário)
-        if (data.video_url || data.url) {
-          return data.video_url || data.url; 
-        }
+        // Mapeamento comum de campos em APIs de download
+        if (data.url) return data.url;
+        if (data.video_url) return data.video_url;
+        if (data.result && data.result.url) return data.result.url;
+        if (data.links && data.links.length > 0) return data.links[0].link || data.links[0].url;
       }
     } catch (e) {
-      console.error("Erro no fallback do RapidAPI:", e);
+      console.error("[Downloader] Erro RapidAPI:", e);
     }
   }
 
   // 2. Fallback base (Cobalt API via POST)
   try {
+    console.log(`[Downloader] Tentando Fallback Cobalt para: ${url}`);
     const COBALT_API_URL = 'https://api.cobalt.tools/api/json';
     const response = await fetch(COBALT_API_URL, {
       method: 'POST',
@@ -37,11 +44,13 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<str
       })
     });
     
-    if (!response.ok) return null;
     const data: any = await response.json();
+    console.log('[Downloader] Resposta Cobalt:', JSON.stringify(data));
+
+    if (!response.ok) return null;
     return data.url || null;
   } catch (error) {
-    console.error("Erro na integração com Cobalt API:", error);
+    console.error("[Downloader] Erro Cobalt:", error);
     return null;
   }
 }
