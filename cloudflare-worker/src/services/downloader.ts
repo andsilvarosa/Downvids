@@ -8,7 +8,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   // 1. PRIORIDADE MÁXIMA: RapidAPI (Se configurada no Cloudflare)
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
     const host = env.RAPIDAPI_HOST.replace(/^https?:\/\//, ''); // Clean host just in case
-    const endpoints = ['/main', '/all', '/json', '/', '/api/v1/dl', '/download', '/api/video'];
+    const endpoints = ['/download', '/api/v1/dl', '/all', '/main', '/json', '/', '/api/video'];
     appendDebug(`RapidAPI Host config: ${host}`);
     
     for (const endpoint of endpoints) {
@@ -52,7 +52,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
                 const lowerUrl = c.toLowerCase();
                 let isValid = true;
                 if (platform === 'instagram' && (lowerUrl.includes('instagram.com/p/') || lowerUrl.includes('instagram.com/reel/'))) isValid = false;
-                if (platform === 'facebook' && (lowerUrl.includes('facebook.com/share/') || lowerUrl.includes('facebook.com/watch') || lowerUrl.includes('fb.watch/'))) isValid = false;
+                if (platform === 'facebook' && lowerUrl.includes('facebook.com/')) isValid = false;
                 if (platform === 'tiktok' && (lowerUrl.includes('tiktok.com/@') || lowerUrl.includes('v.tiktok.com'))) isValid = false;
                 
                 if (isValid) {
@@ -71,6 +71,10 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
              appendDebug(`(Não achei URL no JSON do RapidAPI)`);
           }
         } else {
+           if (res.status === 429) {
+               appendDebug(`RapidAPI falhou com 429 Rate Limit. Abortando tentativa no RapidAPI.`);
+               break;
+           }
            if (res.status !== 404) {
              const txt = await res.text();
              appendDebug(`RapidAPI ${endpoint} Fail: ${res.status} - ${txt.substring(0, 50)}`);

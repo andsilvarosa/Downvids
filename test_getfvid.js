@@ -1,19 +1,15 @@
-import fetch from 'node-fetch';
-async function testLib() {
+async function test() {
   try {
-     const url = 'https://www.facebook.com/share/v/18qSkTTRsD/';
-     const htmlRes = await fetch('https://www.getfvid.com/downloader', {
-       method: 'POST',
-       headers: {
-         'Content-Type': 'application/x-www-form-urlencoded',
-         'User-Agent': 'Mozilla/5.0'
-       },
-       body: 'url=' + encodeURIComponent(url)
-     });
-     console.log(htmlRes.status);
-     const text = await htmlRes.text();
-     const links = text.match(/<a href="([^"]+)"/g);
-     console.log(links ? links.slice(0, 5) : null);
-  } catch(e) { console.error(e) }
-}
-testLib();
+    const res = await fetch("https://www.getfvid.com/downloader", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `url=${encodeURIComponent('https://www.facebook.com/share/r/1GUQtTouj7/')}`
+    });
+    const html = await res.text();
+    const hdMatch = html.match(/href="([^"]+)"[^>]*>Download in HD/);
+    const sdMatch = html.match(/href="([^"]+)"[^>]*>Download in Normal/);
+    console.log(res.status, "HD:", hdMatch?.[1], "SD:", sdMatch?.[1]);
+  } catch(e) {
+    console.log(e.message);
+  }
+} test();

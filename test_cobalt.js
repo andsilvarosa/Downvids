@@ -1,15 +1,23 @@
-const url = "https://vt.tiktok.com/ZS9U3ErRC/";
+const instances = [
+  "https://co.wuk.sh/",
+  "https://api.cobalt.tools/",
+  "https://cobalt.tools/api/json",
+  "https://dl.wuk.sh/",
+];
 async function test() {
-  const cobaltInstances = ['https://co.wuk.sh/'];
-  for (const apiUrl of cobaltInstances) {
-     try {
-        const res = await fetch(apiUrl, {
-           method: 'POST',
-           headers: {'Accept': 'application/json','Content-Type': 'application/json'},
-           body: JSON.stringify({url: url, vQuality: "720", filenameStyle: "pretty"})
-        });
-        console.log(apiUrl, res.status, await res.text());
-     } catch(e) { console.error(e) }
+  for (const apiUrl of instances) {
+    try {
+      const isV10 = apiUrl.endsWith('/') || !apiUrl.includes('api/json');
+      const reqUrl = isV10 ? apiUrl : apiUrl + 'api/json';
+      const res = await fetch(reqUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ url: "https://www.facebook.com/share/r/1GUQtTouj7/" })
+      });
+      console.log(`\n--- ${reqUrl} [${res.status}] ---`);
+      console.log(await res.text());
+    } catch(e) {
+      console.log(`\n--- ${apiUrl} [ERROR] ---`, e.message);
+    }
   }
-}
-test();
+} test();
