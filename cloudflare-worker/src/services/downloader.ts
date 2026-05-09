@@ -211,7 +211,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     }
   }
 
-    // 4. Fallback: Cobalt API Pública
+  // 4. Fallback: Cobalt API Pública
   try {
     const cobaltInstances = [
       'https://api.cobalt.tools/',
