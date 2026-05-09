@@ -226,7 +226,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
       { url },
       { url, downloadMode: 'auto' },
       { url, downloadMode: 'auto', disableMetadata: true },
-      { url, vQuality: '720', filenameStyle: 'pretty' }
+      { url, vQuality: '480', filenameStyle: 'pretty' }
     ];
 
     appendDebug('Tentando Cobalt...');
