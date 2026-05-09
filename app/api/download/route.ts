@@ -32,11 +32,34 @@ export async function POST(req: Request) {
       const data = await rapidRes.json();
       console.log("RapidAPI Success Data Substring:", JSON.stringify(data).substring(0, 100));
       
-      const mediaUrl = data.url || data.video || data.video_url || data.link || data.direct_link ||
-            (data.result && (data.result.url || data.result.video || data.result.hd || data.result.link || data.result.mp4)) ||
-            (data.data && (data.data.url || data.data.main_url || data.data.play || data.data.video || data.data.link)) ||
-            (data.links && (data.links[0]?.link || data.links[0]?.url)) ||
-            (data.medias && data.medias[0]?.url) || (Array.isArray(data) && data[0]?.url);
+      const candidates: any[] = [
+             data.hd, data.data?.hd, data.result?.hd,
+             data.play, data.data?.play, data.result?.play,
+             data.data?.medias?.[0]?.url, data.medias?.[0]?.url,
+             data.video, data.data?.video, data.result?.video,
+             data.video_url,
+             data.links?.[0]?.url, data.links?.[0]?.link,
+             data.data?.main_url,
+             data.url, data.data?.url, data.result?.url,
+             data.link, data.data?.link, data.result?.link,
+             data.direct_link, data.result?.mp4,
+             Array.isArray(data) ? data[0]?.url : null
+      ].filter(Boolean);
+
+      let mediaUrl = null;
+      for (const c of candidates) {
+         if (typeof c === 'string' && c.startsWith('http')) {
+            const lowerUrl = c.toLowerCase();
+            let isValid = true;
+            if (lowerUrl.includes('instagram.com/p/') || lowerUrl.includes('instagram.com/reel/')) isValid = false;
+            if (lowerUrl.includes('facebook.com/share/') || lowerUrl.includes('facebook.com/watch') || lowerUrl.includes('fb.watch/')) isValid = false;
+            if (lowerUrl.includes('tiktok.com/@') || lowerUrl.includes('v.tiktok.com')) isValid = false;
+            if (isValid) {
+               mediaUrl = c;
+               break;
+            }
+         }
+      }
 
       const title = data.title || data.result?.title || data.data?.title || data.result?.description || "Facebook Video";
       const thumbnail = data.thumbnail || data.result?.thumbnail || data.data?.thumbnail || data.result?.image || "";
