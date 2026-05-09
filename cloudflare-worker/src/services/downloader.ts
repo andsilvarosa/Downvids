@@ -160,12 +160,12 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     }
   }
 
-  // 3. Outros Fallbacks (Facebook/Instagram/Youtube/etc)
+  // 3. Outros Fallbacks (Facebook/Instagram/Youtube/Twitter)
   if (platform === 'facebook' || platform === 'instagram' || platform === 'youtube' || platform === 'twitter') {
     try {
        appendDebug(`Buscando fallbacks públicos para ${platform}...`);
        
-       // Fallback 1: Tioo.eu.org (Backend do btch-downloader) - Extremamente confiável
+       // Fallback 1: Tioo.eu.org (Backend do btch-downloader) - Muito rápido
        try {
          let endpoint = '';
          if (platform === 'instagram') endpoint = 'igdl';
@@ -180,8 +180,6 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
             });
             if (tiooRes.ok) {
                const data: any = await tiooRes.json();
-               appendDebug(`Tioo raw: ${JSON.stringify(data).substring(0, 100)}...`);
-               
                let tiooUrl = null;
                if (platform === 'instagram') {
                   if (Array.isArray(data)) tiooUrl = data[0]?.url;
@@ -196,6 +194,14 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
                }
 
                if (tiooUrl && typeof tiooUrl === 'string' && tiooUrl.startsWith('http')) {
+                  appendDebug(`Tioo URL encontrada.`);
+                  try {
+                    const head = await fetch(tiooUrl, { method: 'HEAD' });
+                    const size = head.headers.get('content-length');
+                    const type = head.headers.get('content-type');
+                    if (size) appendDebug(`Tamanho: ${(parseInt(size)/(1024*1024)).toFixed(2)} MB`);
+                    if (type) appendDebug(`Tipo: ${type}`);
+                  } catch(e) {}
                   return { url: tiooUrl, debugInfo: debugLog };
                }
             }
@@ -204,27 +210,55 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
           appendDebug(`Tioo Backend falhou: ${e.message}`);
        }
 
-       // Fallback 2: Vreden (Suporta YT tbm)
+       // Fallback 2: Vreden (Geralmente muito bom para IG/FB/YT)
        try {
          let vrPath = '';
          if (platform === 'facebook') vrPath = 'fbdl';
          else if (platform === 'instagram') vrPath = 'igdl';
          else if (platform === 'youtube') vrPath = 'ytdl';
+         else if (platform === 'twitter') vrPath = 'twitter';
 
          if (vrPath) {
             const vrUrl = `https://api.vreden.web.id/api/${vrPath}?url=${encodeURIComponent(url)}`;
-            appendDebug(`Tentando Vreden...`);
+            appendDebug(`Tentando Vreden (${vrPath})...`);
             const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
             if (vRes.ok) {
                 const data: any = await vRes.json();
                 const res = data.result;
                 const urlResult = res?.hd || res?.sd || res?.url || res?.video || res?.mp4;
-                if (urlResult) return { url: urlResult, debugInfo: debugLog };
+                if (urlResult) {
+                   try {
+                     const head = await fetch(urlResult, { method: 'HEAD' });
+                     const size = head.headers.get('content-length');
+                     const type = head.headers.get('content-type');
+                     if (size) appendDebug(`Tamanho: ${(parseInt(size)/(1024*1024)).toFixed(2)} MB`);
+                     if (type) appendDebug(`Tipo: ${type}`);
+                   } catch(e) {}
+                   return { url: urlResult, debugInfo: debugLog };
+                }
             }
          }
        } catch(e) {}
 
-       // Fallback 3: Agatz
+       // Fallback 3: Ryzendesu (Ótimo para IG e FB)
+       const isFb = platform === 'facebook';
+       const isIg = platform === 'instagram';
+       if (isFb || isIg) {
+          try {
+            const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${isFb ? 'fbdl' : 'igdl'}?url=${encodeURIComponent(url)}`;
+            appendDebug(`Tentando Ryzendesu...`);
+            const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+            if (rRes.ok) {
+                const data: any = await rRes.json();
+                const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
+                if (urlResult && typeof urlResult === 'string' && !urlResult.includes('ryzendesu.vip/api/downloader')) { 
+                  return { url: urlResult, debugInfo: debugLog };
+                }
+            }
+          } catch(e) {}
+       }
+
+       // Fallback 4: Agatz (Youtube, FB, IG)
        try {
          let agPath = '';
          if (platform === 'facebook') agPath = 'facebook';
@@ -243,36 +277,6 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
          }
        } catch(e) {}
 
-       const isFb = platform === 'facebook';
-       const isIg = platform === 'instagram';
-
-       if (isFb || isIg) {
-          // Fallback 4: Ryzendesu API (Restored)
-          try {
-            const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${isFb ? 'fbdl' : 'igdl'}?url=${encodeURIComponent(url)}`;
-            appendDebug(`Tentando Ryzendesu...`);
-            const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            if (rRes.ok) {
-                const data: any = await rRes.json();
-                const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
-                if (urlResult && typeof urlResult === 'string' && !urlResult.includes('ryzendesu.vip/api/downloader')) { 
-                  return { url: urlResult, debugInfo: debugLog };
-                }
-            }
-          } catch(e) {}
-
-          // Fallback 4: Agatz
-          try {
-            const agUrl = `https://api.agatz.xyz/api/${isFb ? 'facebook' : 'instagram'}?url=${encodeURIComponent(url)}`;
-            appendDebug(`Tentando Agatz...`);
-            const aRes = await fetch(agUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            if (aRes.ok) {
-                const data: any = await aRes.json();
-                const urlResult = data.data?.url || data.data?.video || data.data?.[0]?.url;
-                if (urlResult) return { url: urlResult, debugInfo: debugLog };
-            }
-          } catch(e) {}
-       }
     } catch(e: any) {
         appendDebug(`Fallbacks públicos falharam: ${e.message}`);
     }
@@ -324,6 +328,16 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         
         if (resultUrl) {
           appendDebug(`Cobalt OK: ${apiUrl}`);
+          
+          // Verificação rápida de tamanho para debug
+          try {
+             const head = await fetch(resultUrl, { method: 'HEAD' });
+             const size = head.headers.get('content-length');
+             if (size) {
+                appendDebug(`Tamanho estimado: ${(parseInt(size) / (1024*1024)).toFixed(2)} MB`);
+             }
+          } catch(e) {}
+
           return { url: resultUrl, debugInfo: debugLog };
         } else {
            appendDebug(`Resposta Cobalt inválida: ${JSON.stringify(data).substring(0,50)}`);

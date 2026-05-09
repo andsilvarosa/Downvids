@@ -52,12 +52,34 @@ webhookRoute.post('/', async (c) => {
 
   const videoAttempt = await bot.sendVideo(chatId, mediaUrl);
   
-  // O Telegram falha se o vídeo for >50mb ao tentar via URL (por Bot API direto)
   if (!videoAttempt.ok) {
-    await bot.sendMessage(
-      chatId, 
-      `⚠️ O limite de tamanho do Telegram (50MB) foi excedido ou o formato não foi aceito nativamente.\n\nAqui está o link direto para baixar:\n${mediaUrl}`
-    );
+    const errorData: any = await videoAttempt.json().catch(() => ({}));
+    const errorMsg = errorData.description || 'Erro desconhecido';
+    
+    // Se for erro de formato ou download, tenta sendDocument
+    if (errorMsg.includes('failed to get HTTP content') || 
+        errorMsg.includes('wrong file identifier') || 
+        errorMsg.includes('wrong remote file identifier for video')) {
+      
+      await bot.sendMessage(chatId, '🔄 O vídeo não pôde ser processado nativamente. Tentando enviar como arquivo...');
+      const docAttempt = await bot.sendDocument(chatId, mediaUrl);
+      
+      if (docAttempt.ok) return c.text('OK');
+      
+      const docError: any = await docAttempt.json().catch(() => ({}));
+      const finalError = docError.description || errorMsg;
+
+      await bot.sendMessage(
+        chatId, 
+        `⚠️ Falha ao enviar mídia.\n\n*Motivo:* ${finalError}\n\n*Nota:* O Telegram permite links diretos de até 20-50MB. Se o vídeo for maior, ele não será enviado.\n\n🔗 *Link Direto:* [Clique aqui para baixar](${mediaUrl})`,
+        { parse_mode: 'Markdown' }
+      );
+    } else {
+      await bot.sendMessage(
+        chatId, 
+        `⚠️ Erro do Telegram: ${errorMsg}\n\n🔗 *Link Direto para download:* ${mediaUrl}`
+      );
+    }
   }
 
   return c.text('OK');
