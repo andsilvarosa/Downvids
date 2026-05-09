@@ -31,12 +31,36 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         if (res.ok) {
           const data: any = await res.json();
           appendDebug(`RapidAPI OK res: ${JSON.stringify(data).substring(0, 100)}...`);
-          const mediaUrl = data.url || data.video || data.video_url || data.link || data.direct_link ||
+          const mediaUrlCandidate = data.url || data.video || data.video_url || data.link || data.direct_link ||
             (data.result && (data.result.url || data.result.video || data.result.hd || data.result.link || data.result.mp4)) ||
             (data.data && (data.data.url || data.data.main_url || data.data.play || data.data.video || data.data.link)) ||
             (data.links && (data.links[0]?.link || data.links[0]?.url)) ||
             (data.medias && data.medias[0]?.url) || (Array.isArray(data) && data[0]?.url);
-          if (mediaUrl && typeof mediaUrl === 'string' && mediaUrl.startsWith('http')) {
+            
+          let mediaUrl = null;
+          if (mediaUrlCandidate && typeof mediaUrlCandidate === 'string' && mediaUrlCandidate.startsWith('http')) {
+             // Validate that it's not the original html page
+             const platform = detectPlatform(url);
+             const lowerUrl = mediaUrlCandidate.toLowerCase();
+             let isValid = true;
+             if (platform === 'instagram' && (lowerUrl.includes('instagram.com/p/') || lowerUrl.includes('instagram.com/reel/'))) {
+                 isValid = false;
+             }
+             if (platform === 'facebook' && (lowerUrl.includes('facebook.com/share/') || lowerUrl.includes('facebook.com/watch') || lowerUrl.includes('fb.watch/'))) {
+                 isValid = false;
+             }
+             if (platform === 'tiktok' && (lowerUrl.includes('tiktok.com/@') || lowerUrl.includes('v.tiktok.com'))) {
+                 isValid = false;
+             }
+             
+             if (isValid) {
+                 mediaUrl = mediaUrlCandidate;
+             } else {
+                 appendDebug(`(Recusado) RapidAPI retornou a URL original original = ${mediaUrlCandidate}`);
+             }
+          }
+
+          if (mediaUrl) {
             return { url: mediaUrl, debugInfo: debugLog };
           } else {
              appendDebug(`(Não achei URL no JSON do RapidAPI)`);
@@ -127,7 +151,58 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     }
   }
 
-  // 3. Fallback: Cobalt API Pública
+  // 3. Outros Fallbacks (Facebook/Instagram/etc)
+  if (platform === 'facebook' || platform === 'instagram') {
+    try {
+       const isFb = platform === 'facebook';
+       appendDebug(`Buscando fallbacks públicos para ${platform}...`);
+       
+       // Fallback 1: Ryzendesu API
+       try {
+         const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${isFb ? 'fbdl' : 'igdl'}?url=${encodeURIComponent(url)}`;
+         appendDebug(`Tentando Ryzendesu...`);
+         const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+         if (rRes.ok) {
+            const data: any = await rRes.json();
+            const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
+            if (urlResult && !urlResult.includes('ryzendesu.vip/api/downloader')) { // Avoid HTML redirect trap
+               return { url: urlResult, debugInfo: debugLog };
+            }
+         }
+       } catch(e) {}
+       
+       // Fallback 2: Vreden
+       try {
+         const vrUrl = isFb 
+            ? `https://api.vreden.web.id/api/fbdl?url=${encodeURIComponent(url)}`
+            : `https://api.vreden.web.id/api/igdl?url=${encodeURIComponent(url)}`;
+         appendDebug(`Tentando Vreden...`);
+         const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+         if (vRes.ok) {
+            const data: any = await vRes.json();
+            const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video;
+            if (urlResult) return { url: urlResult, debugInfo: debugLog };
+         }
+       } catch(e) {}
+
+       // Fallback 3: Itzpire API
+       try {
+         const itzUrl = `https://itzpire.site/download/${isFb ? 'facebook' : 'instagram'}?url=${encodeURIComponent(url)}`;
+         appendDebug(`Tentando Itzpire...`);
+         const itzRes = await fetch(itzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+         if (itzRes.ok) {
+            const data: any = await itzRes.json();
+            const payload = data.data || data;
+            const urlResult = payload.video || payload.url;
+            if (urlResult) return { url: urlResult, debugInfo: debugLog };
+         }
+       } catch(e) {}
+    } catch(e: any) {
+        appendDebug(`Fallbacks públicos falharam: ${e.message}`);
+    }
+  }
+
+  // 4. Fallback: Cobalt API Pública
   try {
     const cobaltInstances = [
       'https://cobalt.api.unv.is/',

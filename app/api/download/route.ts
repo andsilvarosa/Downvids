@@ -56,8 +56,51 @@ export async function POST(req: Request) {
        console.error("RapidAPI Error:", rapidRes.status, errText);
     }
 
-    // If RapidAPI fails, we could try fallbacks here or return error
-    return NextResponse.json({ error: 'Falha ao processar o vídeo com a API principal.' }, { status: 500 });
+    // Fallback 1: Vreden API
+    try {
+      const encUrl = encodeURIComponent(url);
+      const vredenRes = await fetch(`https://api.vreden.web.id/api/fbdl?url=${encUrl}`);
+      if (vredenRes.ok) {
+        const data = await vredenRes.json();
+        if (data.status && data.result) {
+          return NextResponse.json({
+            title: data.result.title || "Facebook Video",
+            thumbnail: data.result.thumbnail || "",
+            links: [
+              { quality: "HD", url: data.result.hd || data.result.url },
+              { quality: "SD", url: data.result.sd || data.result.url }
+            ].filter((l: any) => l.url),
+            source: "Vreden"
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Vreden fallback failed", e);
+    }
+
+    // Fallback 2: Itzpire API
+    try {
+      const encUrl = encodeURIComponent(url);
+      const itzpireRes = await fetch(`https://itzpire.site/download/facebook?url=${encUrl}`);
+      if (itzpireRes.ok) {
+        const data = await itzpireRes.json();
+        const d = data.data || data;
+        if (data.status === "success" || d.video || d.url) {
+          return NextResponse.json({
+            title: d.title || "Facebook Video",
+            thumbnail: d.thumbnail || "",
+            links: [
+              { quality: "Video", url: d.video || d.url }
+            ].filter((l: any) => l.url),
+            source: "Itzpire"
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Itzpire fallback failed", e);
+    }
+
+    return NextResponse.json({ error: 'Falha ao processar o vídeo. Todas as APIs falharam ou o vídeo é privado.' }, { status: 500 });
   } catch (error: any) {
     console.error("Download Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

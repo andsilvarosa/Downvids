@@ -1,7 +1,10 @@
-async function getInstances() {
-  try {
-    const res = await fetch('https://raw.githubusercontent.com/imputnet/cobalt/current/instances.json');
-    if (res.ok) console.log((await res.text()).substring(0, 500));
-  } catch(e) {}
+async function getCobalts() {
+  const rs = await fetch('https://raw.githubusercontent.com/cobalt-org/instances/master/instances.json');
+  if(rs.ok) {
+     const data = await rs.json();
+     console.log(data.map(d => d.api));
+  } else {
+     console.log(rs.status);
+  }
 }
-getInstances();
+getCobalts();
