@@ -215,7 +215,15 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   try {
     const cobaltInstances = [
       'https://cobalt.api.unv.is/',
-      'https://api.cobalt.tools/'
+      'https://api.cobalt.tools/',
+      'https://co.wuk.sh/'
+    ];
+
+    const cobaltPayloads = [
+      { url },
+      { url, downloadMode: 'auto' },
+      { url, downloadMode: 'auto', disableMetadata: true },
+      { url, vQuality: '720', filenameStyle: 'pretty' }
     ];
 
     appendDebug('Tentando Cobalt...');
@@ -225,40 +233,38 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000); 
 
-        const isV10 = apiUrl === 'https://api.cobalt.tools/';
-        const reqUrl = isV10 ? apiUrl : apiUrl + 'api/json';
+        const requestUrls = [apiUrl + 'api/json', apiUrl];
 
-        const response = await fetch(reqUrl, {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          },
-          body: JSON.stringify({
-            url: url,
-            vQuality: "720", 
-            filenameStyle: "pretty"
-          }),
-          signal: controller.signal
-        });
-        
+        for (const reqUrl of requestUrls) {
+          for (const payload of cobaltPayloads) {
+            const response = await fetch(reqUrl, {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              },
+              body: JSON.stringify(payload),
+              signal: controller.signal
+            });
+
+            if (!response.ok) {
+              appendDebug(`Cobalt ${apiUrl} (${reqUrl.replace(apiUrl, '/')}) error ${response.status}`);
+              continue;
+            }
+
+            const data: any = await response.json();
+            const resultUrl = data.url || (data.picker && data.picker[0]?.url) || data.link;
+
+            if (resultUrl) {
+              clearTimeout(timeoutId);
+              appendDebug(`Cobalt OK: ${apiUrl} (${reqUrl.replace(apiUrl, '/')})`);
+              return { url: resultUrl, debugInfo: debugLog };
+            }
+          }
+        }
+
         clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-           appendDebug(`Cobalt ${apiUrl} error ${response.status}`);
-           continue;
-        }
-
-        const data: any = await response.json();
-        const resultUrl = data.url || (data.picker && data.picker[0]?.url) || data.link;
-        
-        if (resultUrl) {
-          appendDebug(`Cobalt OK: ${apiUrl}`);
-          return { url: resultUrl, debugInfo: debugLog };
-        } else {
-           appendDebug(`Resposta Cobalt inválida: ${JSON.stringify(data).substring(0,50)}`);
-        }
       } catch (e: any) {
          appendDebug(`Cobalt falhou em ${apiUrl}.`);
       }
