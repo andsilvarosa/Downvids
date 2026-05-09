@@ -5,28 +5,13 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   let debugLog = `[Debug Info para ${url}]\n`;
   const appendDebug = (msg: string) => { debugLog += msg + '\n'; };
 
-  const startedAt = Date.now();
-  const MAX_TOTAL_MS = 12000;
-  const isTimedOut = () => Date.now() - startedAt > MAX_TOTAL_MS;
-
-  const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 7000) => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await fetch(input, { ...init, signal: controller.signal });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  };
-
   // 1. PRIORIDADE MÁXIMA: RapidAPI (Se configurada no Cloudflare)
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
     const host = env.RAPIDAPI_HOST.replace(/^https?:\/\//, ''); // Clean host just in case
-    const endpoints = ['/download', '/api/v1/dl', '/all', '/main', '/json', '/', '/api/video'];
+    const endpoints = ['/main', '/all', '/json', '/', '/api/v1/dl', '/download', '/api/video'];
     appendDebug(`RapidAPI Host config: ${host}`);
     
     for (const endpoint of endpoints) {
-      if (isTimedOut()) { appendDebug('Timeout global atingido no RapidAPI.'); break; }
       try {
         appendDebug(`Tentando endpoints: ${endpoint}`);
         // Usar POST para /all ou se for o host que o usuário indicou
@@ -67,7 +52,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
                 const lowerUrl = c.toLowerCase();
                 let isValid = true;
                 if (platform === 'instagram' && (lowerUrl.includes('instagram.com/p/') || lowerUrl.includes('instagram.com/reel/'))) isValid = false;
-                if (platform === 'facebook' && lowerUrl.includes('facebook.com/')) isValid = false;
+                if (platform === 'facebook' && (lowerUrl.includes('facebook.com/share/') || lowerUrl.includes('facebook.com/watch') || lowerUrl.includes('fb.watch/'))) isValid = false;
                 if (platform === 'tiktok' && (lowerUrl.includes('tiktok.com/@') || lowerUrl.includes('v.tiktok.com'))) isValid = false;
                 
                 if (isValid) {
@@ -86,10 +71,6 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
              appendDebug(`(Não achei URL no JSON do RapidAPI)`);
           }
         } else {
-           if (res.status === 429) {
-               appendDebug(`RapidAPI falhou com 429 Rate Limit. Abortando tentativa no RapidAPI.`);
-               break;
-           }
            if (res.status !== 404) {
              const txt = await res.text();
              appendDebug(`RapidAPI ${endpoint} Fail: ${res.status} - ${txt.substring(0, 50)}`);
@@ -122,7 +103,6 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
 
   // 2. TikTok Especializado
   if (platform === 'tiktok') {
-    if (isTimedOut()) return { url: null, debugInfo: debugLog };
     try {
       const fullUrl = await expandUrl(url);
       appendDebug(`Tentando Tikwm com URL: ${fullUrl}`);
@@ -178,7 +158,6 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
 
   // 3. Outros Fallbacks (Facebook/Instagram/etc)
   if (platform === 'facebook' || platform === 'instagram') {
-    if (isTimedOut()) return { url: null, debugInfo: debugLog };
     try {
        const isFb = platform === 'facebook';
        appendDebug(`Buscando fallbacks públicos para ${platform}...`);
@@ -187,7 +166,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
        try {
          const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${isFb ? 'fbdl' : 'igdl'}?url=${encodeURIComponent(url)}`;
          appendDebug(`Tentando Ryzendesu...`);
-         const rRes = await fetchWithTimeout(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 4500);
+         const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
          if (rRes.ok) {
             const data: any = await rRes.json();
             const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
@@ -203,7 +182,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
             ? `https://api.vreden.web.id/api/fbdl?url=${encodeURIComponent(url)}`
             : `https://api.vreden.web.id/api/igdl?url=${encodeURIComponent(url)}`;
          appendDebug(`Tentando Vreden...`);
-         const vRes = await fetchWithTimeout(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 4500);
+         const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
          if (vRes.ok) {
             const data: any = await vRes.json();
             const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video;
@@ -215,7 +194,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
        try {
          const itzUrl = `https://itzpire.site/download/${isFb ? 'facebook' : 'instagram'}?url=${encodeURIComponent(url)}`;
          appendDebug(`Tentando Itzpire...`);
-         const itzRes = await fetchWithTimeout(itzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 4500);
+         const itzRes = await fetch(itzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
          if (itzRes.ok) {
             const data: any = await itzRes.json();
             const payload = data.data || data;
@@ -231,60 +210,51 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   // 4. Fallback: Cobalt API Pública
   try {
     const cobaltInstances = [
-      'https://api.cobalt.tools/',
-      'https://cobalt.qwyh.dev/',
-      'https://api.cobalt.luo.mx/',
-      'https://api.cobalt.wuk.sh/',
-      'https://cobalt.siesens.moe/',
-      'https://api.cobalt.siesens.moe/'
-    ];
-
-    const cobaltPayloads = [
-      { url },
-      { url, downloadMode: 'auto' },
-      { url, downloadMode: 'auto', disableMetadata: true },
-      { url, vQuality: '480', filenameStyle: 'pretty' }
+      'https://cobalt.api.unv.is/',
+      'https://api.cobalt.tools/'
     ];
 
     appendDebug('Tentando Cobalt...');
 
     for (const apiUrl of cobaltInstances) {
-      if (isTimedOut()) { appendDebug('Timeout global atingido no Cobalt.'); break; }
       try {
-        const requestUrls = [apiUrl + 'api/json', apiUrl];
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000); 
 
-        for (const reqUrl of requestUrls) {
-          if (isTimedOut()) break;
-          for (const payload of cobaltPayloads) {
-            if (isTimedOut()) break;
-            const response = await fetchWithTimeout(reqUrl, {
-              method: 'POST',
-              headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Origin': 'https://cobalt.tools',
-                'Referer': 'https://cobalt.tools/',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-              },
-              body: JSON.stringify(payload)
-            }, 3500);
+        const isV10 = apiUrl === 'https://api.cobalt.tools/';
+        const reqUrl = isV10 ? apiUrl : apiUrl + 'api/json';
 
-            if (!response.ok) {
-              appendDebug(`Cobalt ${apiUrl} (${reqUrl.replace(apiUrl, '/')}) error ${response.status}`);
-              if (response.status >= 400 && response.status < 500 && response.status !== 429) break;
-              continue;
-            }
-
-            const data: any = await response.json();
-            const resultUrl = data.url || (data.picker && data.picker[0]?.url) || data.link;
-
-            if (resultUrl) {
-              appendDebug(`Cobalt OK: ${apiUrl} (${reqUrl.replace(apiUrl, '/')})`);
-              return { url: resultUrl, debugInfo: debugLog };
-            }
-          }
+        const response = await fetch(reqUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          body: JSON.stringify({
+            url: url,
+            vQuality: "720", 
+            filenameStyle: "pretty"
+          }),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+           appendDebug(`Cobalt ${apiUrl} error ${response.status}`);
+           continue;
         }
 
+        const data: any = await response.json();
+        const resultUrl = data.url || (data.picker && data.picker[0]?.url) || data.link;
+        
+        if (resultUrl) {
+          appendDebug(`Cobalt OK: ${apiUrl}`);
+          return { url: resultUrl, debugInfo: debugLog };
+        } else {
+           appendDebug(`Resposta Cobalt inválida: ${JSON.stringify(data).substring(0,50)}`);
+        }
       } catch (e: any) {
          appendDebug(`Cobalt falhou em ${apiUrl}.`);
       }

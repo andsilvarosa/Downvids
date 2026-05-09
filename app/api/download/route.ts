@@ -52,7 +52,7 @@ export async function POST(req: Request) {
             const lowerUrl = c.toLowerCase();
             let isValid = true;
             if (lowerUrl.includes('instagram.com/p/') || lowerUrl.includes('instagram.com/reel/')) isValid = false;
-            if (lowerUrl.includes('facebook.com/')) isValid = false;
+            if (lowerUrl.includes('facebook.com/share/') || lowerUrl.includes('facebook.com/watch') || lowerUrl.includes('fb.watch/')) isValid = false;
             if (lowerUrl.includes('tiktok.com/@') || lowerUrl.includes('v.tiktok.com')) isValid = false;
             if (isValid) {
                mediaUrl = c;
@@ -75,9 +75,6 @@ export async function POST(req: Request) {
          });
       }
     } else {
-       if (rapidRes.status === 429) {
-           console.log("RapidAPI Rate Limit 429 reached.");
-       }
        const errText = await rapidRes.text();
        console.error("RapidAPI Error:", rapidRes.status, errText);
     }
