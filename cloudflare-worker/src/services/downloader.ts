@@ -277,3 +277,6 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   } catch (error) {
     appendDebug('Cobalt fallback error');
   }
+
+  return { url: null, debugInfo: debugLog };
+}
