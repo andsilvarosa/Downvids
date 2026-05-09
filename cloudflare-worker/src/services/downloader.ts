@@ -211,12 +211,15 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     }
   }
 
-  // 4. Fallback: Cobalt API Pública
+    // 4. Fallback: Cobalt API Pública
   try {
     const cobaltInstances = [
-      'https://cobalt.api.unv.is/',
       'https://api.cobalt.tools/',
-      'https://co.wuk.sh/'
+      'https://cobalt.qwyh.dev/',
+      'https://api.cobalt.luo.mx/',
+      'https://api.cobalt.wuk.sh/',
+      'https://cobalt.siesens.moe/',
+      'https://api.cobalt.siesens.moe/'
     ];
 
     const cobaltPayloads = [
@@ -242,6 +245,8 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
               headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
+                'Origin': 'https://cobalt.tools',
+                'Referer': 'https://cobalt.tools/',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
               },
               body: JSON.stringify(payload),
@@ -272,6 +277,3 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   } catch (error) {
     appendDebug('Cobalt fallback error');
   }
-
-  return { url: null, debugInfo: debugLog };
-}
