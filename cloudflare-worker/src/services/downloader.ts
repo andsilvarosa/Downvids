@@ -160,135 +160,62 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     }
   }
 
-  // 3. Outros Fallbacks (Facebook/Instagram/Youtube/Twitter)
-  if (platform === 'facebook' || platform === 'instagram' || platform === 'youtube' || platform === 'twitter') {
+  // 3. Outros Fallbacks (Facebook/Instagram/etc)
+  if (platform === 'facebook' || platform === 'instagram') {
     try {
+       const isFb = platform === 'facebook';
        appendDebug(`Buscando fallbacks públicos para ${platform}...`);
        
-       // Fallback 1: Tioo.eu.org (Backend do btch-downloader) - Muito rápido
+       // Fallback 1: Ryzendesu API
        try {
-         let endpoint = '';
-         if (platform === 'instagram') endpoint = 'igdl';
-         else if (platform === 'facebook') endpoint = 'fbdown';
-         else if (platform === 'youtube') endpoint = 'youtube';
-         else if (platform === 'twitter') endpoint = 'twitter';
-
-         if (endpoint) {
-            appendDebug(`Tentando Tioo Backend (${endpoint})...`);
-            const tiooRes = await fetch(`https://backend1.tioo.eu.org/${endpoint}?url=${encodeURIComponent(url)}`, {
-               headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
-            if (tiooRes.ok) {
-               const data: any = await tiooRes.json();
-               let tiooUrl = null;
-               if (platform === 'instagram') {
-                  if (Array.isArray(data)) tiooUrl = data[0]?.url;
-                  else if (data.result && Array.isArray(data.result)) tiooUrl = data.result[0]?.url;
-                  else tiooUrl = data.url || data.result?.url;
-               } else if (platform === 'facebook') {
-                  tiooUrl = data.HD || data.Normal_video || data.result?.HD || data.result?.Normal_video;
-               } else if (platform === 'youtube') {
-                  tiooUrl = data.mp4 || data.result?.mp4 || data.video || data.result?.video;
-               } else if (platform === 'twitter') {
-                  tiooUrl = data.url || data.result?.url || data.video || data.result?.video;
-               }
-
-               if (tiooUrl && typeof tiooUrl === 'string' && tiooUrl.startsWith('http')) {
-                  appendDebug(`Tioo URL encontrada.`);
-                  try {
-                    const head = await fetch(tiooUrl, { method: 'HEAD' });
-                    const size = head.headers.get('content-length');
-                    const type = head.headers.get('content-type');
-                    if (size) appendDebug(`Tamanho: ${(parseInt(size)/(1024*1024)).toFixed(2)} MB`);
-                    if (type) appendDebug(`Tipo: ${type}`);
-                  } catch(e) {}
-                  return { url: tiooUrl, debugInfo: debugLog };
-               }
-            }
-         }
-       } catch (e: any) {
-          appendDebug(`Tioo Backend falhou: ${e.message}`);
-       }
-
-       // Fallback 2: Vreden (Geralmente muito bom para IG/FB/YT)
-       try {
-         let vrPath = '';
-         if (platform === 'facebook') vrPath = 'fbdl';
-         else if (platform === 'instagram') vrPath = 'igdl';
-         else if (platform === 'youtube') vrPath = 'ytdl';
-         else if (platform === 'twitter') vrPath = 'twitter';
-
-         if (vrPath) {
-            const vrUrl = `https://api.vreden.web.id/api/${vrPath}?url=${encodeURIComponent(url)}`;
-            appendDebug(`Tentando Vreden (${vrPath})...`);
-            const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            if (vRes.ok) {
-                const data: any = await vRes.json();
-                const res = data.result;
-                const urlResult = res?.hd || res?.sd || res?.url || res?.video || res?.mp4;
-                if (urlResult) {
-                   try {
-                     const head = await fetch(urlResult, { method: 'HEAD' });
-                     const size = head.headers.get('content-length');
-                     const type = head.headers.get('content-type');
-                     if (size) appendDebug(`Tamanho: ${(parseInt(size)/(1024*1024)).toFixed(2)} MB`);
-                     if (type) appendDebug(`Tipo: ${type}`);
-                   } catch(e) {}
-                   return { url: urlResult, debugInfo: debugLog };
-                }
+         const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${isFb ? 'fbdl' : 'igdl'}?url=${encodeURIComponent(url)}`;
+         appendDebug(`Tentando Ryzendesu...`);
+         const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+         if (rRes.ok) {
+            const data: any = await rRes.json();
+            const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
+            if (urlResult && !urlResult.includes('ryzendesu.vip/api/downloader')) { // Avoid HTML redirect trap
+               return { url: urlResult, debugInfo: debugLog };
             }
          }
        } catch(e) {}
-
-       // Fallback 3: Ryzendesu (Ótimo para IG e FB)
-       const isFb = platform === 'facebook';
-       const isIg = platform === 'instagram';
-       if (isFb || isIg) {
-          try {
-            const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${isFb ? 'fbdl' : 'igdl'}?url=${encodeURIComponent(url)}`;
-            appendDebug(`Tentando Ryzendesu...`);
-            const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            if (rRes.ok) {
-                const data: any = await rRes.json();
-                const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
-                if (urlResult && typeof urlResult === 'string' && !urlResult.includes('ryzendesu.vip/api/downloader')) { 
-                  return { url: urlResult, debugInfo: debugLog };
-                }
-            }
-          } catch(e) {}
-       }
-
-       // Fallback 4: Agatz (Youtube, FB, IG)
+       
+       // Fallback 2: Vreden
        try {
-         let agPath = '';
-         if (platform === 'facebook') agPath = 'facebook';
-         else if (platform === 'instagram') agPath = 'instagram';
-         else if (platform === 'youtube') agPath = 'ytmp4';
-
-         if (agPath) {
-            const agUrl = `https://api.agatz.xyz/api/${agPath}?url=${encodeURIComponent(url)}`;
-            appendDebug(`Tentando Agatz...`);
-            const aRes = await fetch(agUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            if (aRes.ok) {
-                const data: any = await aRes.json();
-                const urlResult = data.data?.url || data.data?.video || data.data?.[0]?.url || data.data?.mp4;
-                if (urlResult) return { url: urlResult, debugInfo: debugLog };
-            }
+         const vrUrl = isFb 
+            ? `https://api.vreden.web.id/api/fbdl?url=${encodeURIComponent(url)}`
+            : `https://api.vreden.web.id/api/igdl?url=${encodeURIComponent(url)}`;
+         appendDebug(`Tentando Vreden...`);
+         const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+         if (vRes.ok) {
+            const data: any = await vRes.json();
+            const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video;
+            if (urlResult) return { url: urlResult, debugInfo: debugLog };
          }
        } catch(e) {}
 
+       // Fallback 3: Itzpire API
+       try {
+         const itzUrl = `https://itzpire.site/download/${isFb ? 'facebook' : 'instagram'}?url=${encodeURIComponent(url)}`;
+         appendDebug(`Tentando Itzpire...`);
+         const itzRes = await fetch(itzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+         if (itzRes.ok) {
+            const data: any = await itzRes.json();
+            const payload = data.data || data;
+            const urlResult = payload.video || payload.url;
+            if (urlResult) return { url: urlResult, debugInfo: debugLog };
+         }
+       } catch(e) {}
     } catch(e: any) {
         appendDebug(`Fallbacks públicos falharam: ${e.message}`);
     }
   }
 
-  // 4. Fallback: Cobalt (Várias instâncias)
+  // 4. Fallback: Cobalt API Pública
   try {
     const cobaltInstances = [
       'https://cobalt.api.unv.is/',
-      'https://api.cobalt.tools/',
-      'https://cobalt.now.sh/',
-      'https://co.wuk.sh/'
+      'https://api.cobalt.tools/'
     ];
 
     appendDebug('Tentando Cobalt...');
@@ -328,16 +255,6 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         
         if (resultUrl) {
           appendDebug(`Cobalt OK: ${apiUrl}`);
-          
-          // Verificação rápida de tamanho para debug
-          try {
-             const head = await fetch(resultUrl, { method: 'HEAD' });
-             const size = head.headers.get('content-length');
-             if (size) {
-                appendDebug(`Tamanho estimado: ${(parseInt(size) / (1024*1024)).toFixed(2)} MB`);
-             }
-          } catch(e) {}
-
           return { url: resultUrl, debugInfo: debugLog };
         } else {
            appendDebug(`Resposta Cobalt inválida: ${JSON.stringify(data).substring(0,50)}`);
@@ -348,16 +265,6 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     }
   } catch (error) {
     appendDebug('Cobalt fallback error');
-  }
-
-  // FINAL ATTEMPT: Se nada funcionou e a URL tem parâmetros, tenta limpar e rodar de novo (RECURSIVO)
-  if (url.includes('?') || url.includes('&')) {
-    const cleanUrl = url.split(/[?#]/)[0];
-    if (cleanUrl !== url) {
-       appendDebug(`Nada funcionou. Tentando com URL limpa: ${cleanUrl}`);
-       const retryResult = await getDirectMediaUrl(cleanUrl, env);
-       return { url: retryResult.url, debugInfo: debugLog + '\n--- RETRY ---\n' + retryResult.debugInfo };
-    }
   }
 
   return { url: null, debugInfo: debugLog };

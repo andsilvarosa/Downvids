@@ -1,11 +1,11 @@
 export class TelegramBot {
   constructor(private token: string) {}
 
-  async sendMessage(chatId: number, text: string, options: any = {}) {
+  async sendMessage(chatId: number, text: string) {
     return await fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, ...options })
+      body: JSON.stringify({ chat_id: chatId, text })
     });
   }
 
@@ -14,14 +14,6 @@ export class TelegramBot {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, video: videoUrl })
-    });
-  }
-
-  async sendDocument(chatId: number, docUrl: string) {
-    return await fetch(`https://api.telegram.org/bot${this.token}/sendDocument`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, document: docUrl })
     });
   }
 }
