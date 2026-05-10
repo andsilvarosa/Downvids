@@ -233,7 +233,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
           },
           body: JSON.stringify({
             url: url,
-            vQuality: "720", 
+            vQuality: "480", 
             filenameStyle: "pretty"
           }),
           signal: controller.signal
