@@ -68,7 +68,7 @@ webhookRoute.post('/', async (c) => {
       }
     } catch (error: any) {
       console.error('Erro no processamento background:', error);
-      await bot.sendMessage(chatId, `❌ Ops! Ocorreu um erro interno ao processar o vídeo.\n\nPor favor, tente novamente em alguns instantes.`);
+      await bot.sendMessage(chatId, `❌ Ops! Ocorreu um erro interno ao processar o vídeo.\n\nDetalhe técnico: ${error.message}\n\nPor favor, tente novamente em alguns instantes.`);
     }
   })());
 

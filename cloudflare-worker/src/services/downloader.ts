@@ -1,9 +1,7 @@
 import { Bindings } from '../types';
 import { detectPlatform } from '../utils/url-parser';
 
-export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ url: string | null, debugInfo: string }> {
-  let debugLog = `[Debug Info para ${url}]\n`;
-  const appendDebug = (msg: string) => { debugLog += msg + '\n'; };
+
 async function fetchWithTimeout(url: string, options: any = {}, timeout = 5000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
@@ -16,6 +14,10 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 5000) 
      throw e;
   }
 }
+
+export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ url: string | null, debugInfo: string }> {
+  let debugLog = `[Debug Info para ${url}]\n`;
+  const appendDebug = (msg: string) => { debugLog += msg + '\n'; };
 
   // 1. PRIORIDADE MÁXIMA: RapidAPI (Se configurada no Cloudflare)
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
@@ -282,7 +284,7 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 5000) 
 
         appendDebug(`>> Cobalt try: ${apiUrl}`);
 
-        const response = await fetch(reqUrl, {
+        const response = await fetchWithTimeout(reqUrl, {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
@@ -291,7 +293,7 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 5000) 
           },
           body: JSON.stringify({
             url: url,
-            videoQuality: "720", // Cobalt v10 usa videoQuality
+            videoQuality: "720", 
             filenameStyle: "pretty",
             downloadMode: "auto"
           }),
@@ -307,7 +309,7 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 5000) 
            // Se for 400, talvez tentar sem videoQuality (auto)
            if (response.status === 400 && apiUrl.includes('cobalt.tools')) {
               appendDebug(`Tentando novamente ${apiUrl} sem videoQuality...`);
-              const retryRes = await fetch(reqUrl, {
+              const retryRes = await fetchWithTimeout(reqUrl, {
                 method: 'POST',
                 headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: url })
