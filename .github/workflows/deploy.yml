@@ -22,13 +22,6 @@ jobs:
         run: npm install
         working-directory: ./cloudflare-worker
 
-      - name: Configure D1 Database ID
-        run: |
-          if [ ! -z "${{ secrets.CF_D1_DATABASE_ID }}" ]; then
-            sed -i 's/database_id = "COLOQUE_SEU_D1_ID_AQUI"/database_id = "${{ secrets.CF_D1_DATABASE_ID }}"/' wrangler.toml
-          fi
-        working-directory: ./cloudflare-worker
-
       - name: Build
         run: npm run build
         working-directory: ./cloudflare-worker

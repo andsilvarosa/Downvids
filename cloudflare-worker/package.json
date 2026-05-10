@@ -6,8 +6,8 @@
     "dev": "wrangler pages dev dist",
     "build": "esbuild src/index.ts --bundle --format=esm --outfile=dist/_worker.js",
     "deploy": "wrangler pages deploy dist",
-    "db:init": "wrangler d1 execute video-downloader-db --local --file=./schema.sql",
-    "db:prod": "wrangler d1 execute video-downloader-db --remote --file=./schema.sql"
+    "db:init": "wrangler d1 execute downvids --local --file=./schema.sql",
+    "db:prod": "wrangler d1 execute downvids --remote --file=./schema.sql"
   },
   "dependencies": {
     "hono": "^4.2.0"
