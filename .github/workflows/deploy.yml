@@ -29,13 +29,17 @@ jobs:
           fi
         working-directory: ./cloudflare-worker
 
-      - name: Deploy to Cloudflare Workers
+      - name: Build
+        run: npm run build
+        working-directory: ./cloudflare-worker
+
+      - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           workingDirectory: 'cloudflare-worker'
-          command: deploy
+          command: pages deploy dist --project-name=video-downloader-bot
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
