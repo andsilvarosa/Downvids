@@ -256,23 +256,15 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
       'https://cobalt.api.unv.is/',
       'https://cobalt.asap.works/',
       'https://cobalt.fast-api.tools/',
-      'https://api.cobalt.codes/',
-      'https://cobalt.hyonsu.com/',
-      'https://cobalt.disroot.org/',
-      'https://cobalt.q69.de/',
-      'https://api.cobalt.is/',
-      'https://cobalt.cloud/',
-      'https://cobalt.bookofmormon.men/',
-      'https://cobalt.0x53.de/',
-      'https://cobalt.sh/'
-    ];
+      'https://api.cobalt.codes/'
+    ].sort(() => Math.random() - 0.5);
 
     appendDebug('Tentando instâncias do Cobalt...');
 
     for (const apiUrl of cobaltInstances) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout per cobalt instance
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout reduzido
         const isV10 = apiUrl.includes('cobalt.tools');
         const reqUrl = isV10 ? apiUrl : (apiUrl.endsWith('/') ? apiUrl + 'api/json' : apiUrl + '/api/json');
 
