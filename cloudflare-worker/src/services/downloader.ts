@@ -19,6 +19,9 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 5000) 
 
   // 1. PRIORIDADE MÁXIMA: RapidAPI (Se configurada no Cloudflare)
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
+    const host = env.RAPIDAPI_HOST.replace(/^https?:\/\//, ''); // Clean host just in case
+    // Endpoints comuns em APIs de download no RapidAPI (Jakub Lipinski / outros)
+    const endpoints = [
       '/v1/social/autolink', '/social/autolink', '/smvd/get/all', '/smvd/all', 
       '/', '/all', '/main', '/get-video', '/download', '/api/video', '/api/v1/dl'
     ];
