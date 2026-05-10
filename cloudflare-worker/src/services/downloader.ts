@@ -9,87 +9,78 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
     const host = env.RAPIDAPI_HOST.replace(/^https?:\/\//, ''); // Clean host just in case
     // Endpoints comuns em APIs de download no RapidAPI (Jakub Lipinski / outros)
-    const endpoints = ['/smvd/get/all', '/smvd/all', '/', '/all', '/main', '/get-video', '/download', '/api/video', '/api/v1/dl'];
+    const endpoints = [
+      '/v1/social/autolink', '/social/autolink', '/smvd/get/all', '/smvd/all', 
+      '/', '/all', '/main', '/get-video', '/download', '/api/video', '/api/v1/dl'
+    ];
     appendDebug(`RapidAPI Host config: ${host}`);
     
     for (const endpoint of endpoints) {
       try {
         appendDebug(`Tentando RapidAPI endpoint: ${endpoint}`);
-        // Forçar POST para hosts específicos que sabemos que funcionam assim
-        const isSocialDownloader = host.includes('social-media-video-downloader');
-        const isSmvd = endpoint.includes('/smvd/');
-        // SMVD por Jakub Lipinski costuma usar GET para /smvd/get/all
-        const isPost = (endpoint === '/all' || endpoint === '/main' || endpoint === '/' || isSocialDownloader) && !isSmvd;
-        const fetchUrl = `https://${host}${endpoint}`;
-        
-        // Tentar tanto POST com FORM quanto POST com JSON se for um endpoint de POST
-        const subMethods = isPost ? ['POST_JSON', 'POST_FORM'] : ['GET'];
+        // Tentar tanto GET quanto POST (JSON e FORM) para cada endpoint
+        const variants = [
+          { method: 'GET', type: 'QUERY' },
+          { method: 'POST', type: 'JSON' },
+          { method: 'POST', type: 'FORM' }
+        ];
 
-        for (const subMethod of subMethods) {
+        for (const variant of variants) {
           try {
-            const isJson = subMethod === 'POST_JSON';
-            const isForm = subMethod === 'POST_FORM';
+            const isPost = variant.method === 'POST';
+            const subMethod = variant.type;
             
-            appendDebug(`RapidAPI sub-tentativa: ${subMethod}`);
+            appendDebug(`RapidAPI sub-tentativa: ${variant.method} ${subMethod}`);
             
-            const res = await fetch(isPost ? fetchUrl : `${fetchUrl}?url=${encodeURIComponent(url)}`, {
-              method: isPost ? 'POST' : 'GET',
+            const fetchUrl = isPost ? `https://${host}${endpoint}` : `https://${host}${endpoint}?url=${encodeURIComponent(url)}`;
+            const res = await fetch(fetchUrl, {
+              method: variant.method,
               headers: {
                 'X-RapidAPI-Key': env.RAPIDAPI_KEY,
                 'X-RapidAPI-Host': host,
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                ...(isForm ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
-                ...(isJson ? { 'Content-Type': 'application/json' } : {})
+                ...(variant.type === 'FORM' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+                ...(variant.type === 'JSON' ? { 'Content-Type': 'application/json' } : {})
               },
-              ...(isForm ? { body: `url=${encodeURIComponent(url)}` } : {}),
-              ...(isJson ? { body: JSON.stringify({ url }) } : {}),
-              cf: { cacheEverything: false } // Avoid CF cache on API calls
+              ...(variant.type === 'FORM' ? { body: `url=${encodeURIComponent(url)}` } : {}),
+              ...(variant.type === 'JSON' ? { body: JSON.stringify({ url }) } : {}),
+              cf: { cacheEverything: false }
             });
 
             if (res.ok) {
               const data: any = await res.json();
-              appendDebug(`RapidAPI Sucesso (${subMethod}): ${JSON.stringify(data).substring(0, 150)}...`);
+              appendDebug(`RapidAPI Sucesso (${subMethod}): ${JSON.stringify(data).substring(0, 50)}...`);
               
-              // Mapeamento extensivo de chaves de resposta
-              const candidates: any[] = [
-                 data.hd, data.data?.hd, data.result?.hd,
-                 data.play, data.data?.play, data.result?.play,
-                 data.url, data.data?.url, data.result?.url,
-                 data.link, data.data?.link, data.result?.link,
-                 data.video, data.data?.video, data.result?.video,
-                 data.video_url, data.data?.video_url,
-                 data.mp4, data.data?.mp4,
-                 data.direct_link,
-                 data.links?.[0]?.url, data.links?.[0]?.link,
-                 data.data?.medias?.[0]?.url, data.medias?.[0]?.url,
-                 data.result?.medias?.[0]?.url,
-                 data.data?.main_url,
-                 Array.isArray(data) ? (data[0]?.url || data[0]?.link) : null,
-                 data.result?.mp4,
-                 data.data?.link_video,
-                 data.data?.links?.[0]?.url,
-                 data.data?.download_link,
-                 data.data?.links?.HD,
-                 data.data?.links?.SD
-              ].filter(Boolean);
-
-              let mediaUrl = null;
-              const platform = detectPlatform(url);
-              for (const c of candidates) {
-                 if (typeof c === 'string' && c.startsWith('http')) {
-                    const lowerUrl = c.toLowerCase();
-                    let isValid = true;
-                    if (platform === 'instagram' && (lowerUrl.includes('instagram.com/p/') || lowerUrl.includes('instagram.com/reel/'))) isValid = false;
-                    if (platform === 'facebook' && (lowerUrl.includes('facebook.com/share/') || lowerUrl.includes('facebook.com/watch') || lowerUrl.includes('fb.watch/'))) isValid = false;
-                    if (platform === 'tiktok' && (lowerUrl.includes('tiktok.com/@') || lowerUrl.includes('v.tiktok.com'))) isValid = false;
-                    if (platform === 'youtube' && (lowerUrl.includes('youtube.com/') || lowerUrl.includes('youtu.be/'))) isValid = false;
-                    
-                    if (isValid) {
-                       mediaUrl = c;
-                       break;
+              // Busca recursiva profunda por campos que contêm URLs de mídia direta
+              const findAnyUrl = (obj: any): string | null => {
+                 if (!obj || typeof obj !== 'object') return null;
+                 const mediaKeys = [
+                    'hd', 'sd', 'play', 'url', 'link', 'video', 'video_url', 'mp4', 'direct_link', 
+                    'download_link', 'main_url', 'media'
+                 ];
+                 for (const k of mediaKeys) {
+                    const val = obj[k];
+                    if (typeof val === 'string' && val.startsWith('http')) {
+                       const vLower = val.toLowerCase();
+                       const platform = detectPlatform(url);
+                       // Ignorar se for a própria página original (algumas APIs retornam o input)
+                       let looksValid = true;
+                       if (platform === 'instagram' && vLower.includes('instagram.com/p/')) looksValid = false;
+                       if (platform === 'facebook' && (vLower.includes('facebook.com/share/') || vLower.includes('fb.watch/'))) looksValid = false;
+                       if (looksValid) return val;
                     }
                  }
-              }
+                 // Recursão
+                 for (const k in obj) {
+                    if (typeof obj[k] === 'object') {
+                       const found = findAnyUrl(obj[k]);
+                       if (found) return found;
+                    }
+                 }
+                 return null;
+              };
+
+              let mediaUrl = findAnyUrl(data);
 
               if (mediaUrl) {
                 appendDebug(`URL Final RapidAPI: ${mediaUrl.substring(0, 50)}...`);
@@ -205,19 +196,23 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
        
        // Fallback 2: Vreden (FB/IG/YT)
        try {
+         const vredenHosts = ['https://api.vreden.my.id', 'https://api.vreden.web.id'];
          const vredenPaths = isFb ? ['/api/fbdl', '/api/download/facebook'] : 
                              isIg ? ['/api/igdl', '/api/download/instagram'] : 
                              ['/api/ytdl', '/api/download/youtube'];
          
-         for (const path of vredenPaths) {
-           const vrUrl = `https://api.vreden.my.id${path}?url=${encodeURIComponent(url)}`;
-           appendDebug(`Tentando Vreden ${path}...`);
-           const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-           if (vRes.ok) {
-              const data: any = await vRes.json();
-              appendDebug(`Vreden res: ${JSON.stringify(data).substring(0, 100)}`);
-              const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video || data.result?.mp4 || data.data?.url;
-              if (urlResult) return { url: urlResult, debugInfo: debugLog };
+         for (const vHost of vredenHosts) {
+           for (const vPath of vredenPaths) {
+             try {
+               const vrUrl = `${vHost}${vPath}?url=${encodeURIComponent(url)}`;
+               appendDebug(`Tentando Vreden ${vHost}${vPath}...`);
+               const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+               if (vRes.ok) {
+                  const data: any = await vRes.json();
+                  const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video || data.data?.url || data.data?.video;
+                  if (urlResult) return { url: urlResult, debugInfo: debugLog };
+               }
+             } catch(e) {}
            }
          }
        } catch(e) { }
@@ -228,6 +223,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
          if (isFb) delPath = '/download/facebook?url=';
          else if (isIg) delPath = '/download/instagram?url=';
          else if (platform === 'youtube') delPath = '/download/ytmp4?url=';
+         else if (platform === 'tiktok') delPath = '/download/tiktok?url=';
          
          if (delPath) {
            const delUrl = `https://delirius-api-oficial.vercel.app${delPath}${encodeURIComponent(url)}`;
@@ -235,24 +231,23 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
            const delRes = await fetch(delUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
            if (delRes.ok) {
               const data: any = await delRes.json();
-              appendDebug(`Delirius res: ${JSON.stringify(data).substring(0, 100)}`);
-              const urlResult = data.data?.url || data.data?.media || data.result?.url;
+              const urlResult = data.data?.url || data.data?.media || data.result?.url || data.data?.video || data.result?.video;
               if (urlResult) return { url: urlResult, debugInfo: debugLog };
            }
          }
        } catch(e) { }
 
        // Fallback 4: Itzpire API
-       if (isFb || isIg) {
+       if (isFb || isIg || platform === 'tiktok' || platform === 'youtube') {
          try {
-           const itzUrl = `https://itzpire.site/download/${isFb ? 'facebook' : 'instagram'}?url=${encodeURIComponent(url)}`;
+           let itzPath = isFb ? 'facebook' : isIg ? 'instagram' : platform === 'tiktok' ? 'tiktok' : 'youtube';
+           const itzUrl = `https://itzpire.site/download/${itzPath}?url=${encodeURIComponent(url)}`;
            appendDebug(`Tentando Itzpire...`);
            const itzRes = await fetch(itzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
            if (itzRes.ok) {
               const data: any = await itzRes.json();
-              appendDebug(`Itzpire res: ${JSON.stringify(data).substring(0, 100)}`);
               const payload = data.data || data;
-              const urlResult = payload.video || payload.url;
+              const urlResult = payload.video || payload.url || (payload.links && payload.links[0]?.url);
               if (urlResult) return { url: urlResult, debugInfo: debugLog };
            }
          } catch(e) { }
@@ -265,6 +260,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   // 4. Fallback: Cobalt API Pública (VÁRIAS INSTÂNCIAS)
   try {
     const cobaltInstances = [
+      'https://cobalt.api.unv.is/',
       'https://cobalt.asap.works/',
       'https://cobalt.fast-api.tools/',
       'https://api.cobalt.codes/',
@@ -274,7 +270,8 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
       'https://api.cobalt.is/',
       'https://cobalt.cloud/',
       'https://cobalt.bookofmormon.men/',
-      'https://cobalt.0x53.de/'
+      'https://cobalt.0x53.de/',
+      'https://cobalt.sh/'
     ];
 
     appendDebug('Tentando instâncias do Cobalt...');
