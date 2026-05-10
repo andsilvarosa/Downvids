@@ -9,7 +9,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
     const host = env.RAPIDAPI_HOST.replace(/^https?:\/\//, ''); // Clean host just in case
     // Endpoints comuns em APIs de download no RapidAPI (Jakub Lipinski / outros)
-    const endpoints = ['/', '/all', '/main', '/get-video', '/download', '/api/video', '/api/youtube', '/v1/social/autolink', '/social/autolink', '/api/v1/dl'];
+    const endpoints = ['/smvd/get/all', '/smvd/all', '/', '/all', '/main', '/get-video', '/download', '/api/video', '/api/v1/dl'];
     appendDebug(`RapidAPI Host config: ${host}`);
     
     for (const endpoint of endpoints) {
@@ -17,7 +17,9 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         appendDebug(`Tentando RapidAPI endpoint: ${endpoint}`);
         // Forçar POST para hosts específicos que sabemos que funcionam assim
         const isSocialDownloader = host.includes('social-media-video-downloader');
-        const isPost = endpoint === '/all' || endpoint === '/main' || endpoint === '/' || isSocialDownloader;
+        const isSmvd = endpoint.includes('/smvd/');
+        // SMVD por Jakub Lipinski costuma usar GET para /smvd/get/all
+        const isPost = (endpoint === '/all' || endpoint === '/main' || endpoint === '/' || isSocialDownloader) && !isSmvd;
         const fetchUrl = `https://${host}${endpoint}`;
         
         // Tentar tanto POST com FORM quanto POST com JSON se for um endpoint de POST
@@ -196,37 +198,51 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
               const data: any = await rRes.json();
               appendDebug(`Ryzendesu res: ${JSON.stringify(data).substring(0, 100)}`);
               const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
-              if (urlResult && !urlResult.includes('ryzendesu.vip/api/downloader')) { 
-                 return { url: urlResult, debugInfo: debugLog };
-              }
-           } else {
-              appendDebug(`Ryzendesu falhou: ${rRes.status}`);
+              if (urlResult) return { url: urlResult, debugInfo: debugLog };
            }
-         } catch(e) { appendDebug(`Erro Ryzendesu.`); }
+         } catch(e) { }
        }
        
        // Fallback 2: Vreden (FB/IG/YT)
        try {
-         let vrUrl = '';
-         if (isFb) vrUrl = `https://api.vreden.my.id/api/fbdl?url=${encodeURIComponent(url)}`;
-         else if (isIg) vrUrl = `https://api.vreden.my.id/api/igdl?url=${encodeURIComponent(url)}`;
-         else if (platform === 'youtube') vrUrl = `https://api.vreden.my.id/api/ytdl?url=${encodeURIComponent(url)}`;
-
-         if (vrUrl) {
-           appendDebug(`Tentando Vreden...`);
+         const vredenPaths = isFb ? ['/api/fbdl', '/api/download/facebook'] : 
+                             isIg ? ['/api/igdl', '/api/download/instagram'] : 
+                             ['/api/ytdl', '/api/download/youtube'];
+         
+         for (const path of vredenPaths) {
+           const vrUrl = `https://api.vreden.my.id${path}?url=${encodeURIComponent(url)}`;
+           appendDebug(`Tentando Vreden ${path}...`);
            const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
            if (vRes.ok) {
               const data: any = await vRes.json();
               appendDebug(`Vreden res: ${JSON.stringify(data).substring(0, 100)}`);
-              const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video || data.result?.mp4;
+              const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video || data.result?.mp4 || data.data?.url;
               if (urlResult) return { url: urlResult, debugInfo: debugLog };
-           } else {
-              appendDebug(`Vreden falhou: ${vRes.status}`);
            }
          }
-       } catch(e) { appendDebug(`Erro Vreden.`); }
+       } catch(e) { }
 
-       // Fallback 3: Itzpire API
+       // Fallback 3: Delirius API
+       try {
+         let delPath = '';
+         if (isFb) delPath = '/download/facebook?url=';
+         else if (isIg) delPath = '/download/instagram?url=';
+         else if (platform === 'youtube') delPath = '/download/ytmp4?url=';
+         
+         if (delPath) {
+           const delUrl = `https://delirius-api-oficial.vercel.app${delPath}${encodeURIComponent(url)}`;
+           appendDebug(`Tentando Delirius...`);
+           const delRes = await fetch(delUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+           if (delRes.ok) {
+              const data: any = await delRes.json();
+              appendDebug(`Delirius res: ${JSON.stringify(data).substring(0, 100)}`);
+              const urlResult = data.data?.url || data.data?.media || data.result?.url;
+              if (urlResult) return { url: urlResult, debugInfo: debugLog };
+           }
+         }
+       } catch(e) { }
+
+       // Fallback 4: Itzpire API
        if (isFb || isIg) {
          try {
            const itzUrl = `https://itzpire.site/download/${isFb ? 'facebook' : 'instagram'}?url=${encodeURIComponent(url)}`;
@@ -238,10 +254,8 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
               const payload = data.data || data;
               const urlResult = payload.video || payload.url;
               if (urlResult) return { url: urlResult, debugInfo: debugLog };
-           } else {
-              appendDebug(`Itzpire falhou: ${itzRes.status}`);
            }
-         } catch(e) { appendDebug(`Erro Itzpire.`); }
+         } catch(e) { }
        }
     } catch(e: any) {
         appendDebug(`Fallbacks públicos falharam: ${e.message}`);
@@ -258,7 +272,9 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
       'https://cobalt.disroot.org/',
       'https://cobalt.q69.de/',
       'https://api.cobalt.is/',
-      'https://cobalt.cloud/'
+      'https://cobalt.cloud/',
+      'https://cobalt.bookofmormon.men/',
+      'https://cobalt.0x53.de/'
     ];
 
     appendDebug('Tentando instâncias do Cobalt...');
