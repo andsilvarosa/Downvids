@@ -57,10 +57,11 @@ webhookRoute.post('/', async (c) => {
         return;
       }
 
-      const videoAttempt = await bot.sendVideo(chatId, mediaUrl);
-      
-      // O Telegram falha se o vídeo for >50mb ao tentar via URL (por Bot API direto)
-      if (!videoAttempt.ok) {
+      // Processar em segundo plano para não travar o webhook do Telegram
+      try {
+        await bot.sendVideo(chatId, mediaUrl);
+      } catch (error: any) {
+        console.warn('sendVideo falhou ou arquivo muito grande, enviando link:', error.message);
         await bot.sendMessage(
           chatId, 
           `⚠️ O limite de tamanho do Telegram (50MB) foi excedido ou o formato não foi aceito nativamente.\n\nAqui está o link direto para baixar:\n${mediaUrl}`
