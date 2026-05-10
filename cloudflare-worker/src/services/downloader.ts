@@ -4,12 +4,21 @@ import { detectPlatform } from '../utils/url-parser';
 export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ url: string | null, debugInfo: string }> {
   let debugLog = `[Debug Info para ${url}]\n`;
   const appendDebug = (msg: string) => { debugLog += msg + '\n'; };
+async function fetchWithTimeout(url: string, options: any = {}, timeout = 5000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+     const response = await fetch(url, { ...options, signal: controller.signal });
+     clearTimeout(id);
+     return response;
+  } catch (e) {
+     clearTimeout(id);
+     throw e;
+  }
+}
 
   // 1. PRIORIDADE MÁXIMA: RapidAPI (Se configurada no Cloudflare)
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
-    const host = env.RAPIDAPI_HOST.replace(/^https?:\/\//, ''); // Clean host just in case
-    // Endpoints comuns em APIs de download no RapidAPI (Jakub Lipinski / outros)
-    const endpoints = [
       '/v1/social/autolink', '/social/autolink', '/smvd/get/all', '/smvd/all', 
       '/', '/all', '/main', '/get-video', '/download', '/api/video', '/api/v1/dl'
     ];
@@ -33,7 +42,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
             appendDebug(`RapidAPI sub-tentativa: ${variant.method} ${subMethod}`);
             
             const fetchUrl = isPost ? `https://${host}${endpoint}` : `https://${host}${endpoint}?url=${encodeURIComponent(url)}`;
-            const res = await fetch(fetchUrl, {
+            const res = await fetchWithTimeout(fetchUrl, {
               method: variant.method,
               headers: {
                 'X-RapidAPI-Key': env.RAPIDAPI_KEY,
@@ -122,7 +131,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     try {
       const fullUrl = await expandUrl(url);
       appendDebug(`Tentando Tikwm com URL: ${fullUrl}`);
-      const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(fullUrl)}`, {
+      const res = await fetchWithTimeout(`https://www.tikwm.com/api/?url=${encodeURIComponent(fullUrl)}`, {
         headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }
       });
       const data: any = await res.json();
@@ -134,7 +143,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
       
       // Tentativa 2 com outra API pública (Lovetik)
       appendDebug('Tentando API alternativa (Lovetik)...');
-      const altRes = await fetch('https://lovetik.com/api/ajax/search', {
+      const altRes = await fetchWithTimeout('https://lovetik.com/api/ajax/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'User-Agent': 'Mozilla/5.0' },
         body: `query=${encodeURIComponent(fullUrl)}`
@@ -154,7 +163,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
       
       // Tentativa 3: TiklyDown
       appendDebug('Tentando TiklyDown...');
-      const tiklyRes = await fetch(`https://api.tiklydown.eu.org/api/download?url=${encodeURIComponent(fullUrl)}`, {
+      const tiklyRes = await fetchWithTimeout(`https://api.tiklydown.eu.org/api/download?url=${encodeURIComponent(fullUrl)}`, {
           headers: { 'User-Agent': 'Mozilla/5.0' }
       });
       if (tiklyRes.ok) {
