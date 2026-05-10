@@ -179,37 +179,35 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
        const isIg = platform === 'instagram';
        appendDebug(`Buscando fallbacks públicos para ${platform}...`);
        
-       // Fallback 1: Ryzendesu API (IG/FB)
-       if (isFb || isIg) {
-         try {
-           const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${isFb ? 'fbdl' : 'igdl'}?url=${encodeURIComponent(url)}`;
-           appendDebug(`Tentando Ryzendesu...`);
-           const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-           if (rRes.ok) {
-              const data: any = await rRes.json();
-              appendDebug(`Ryzendesu res: ${JSON.stringify(data).substring(0, 100)}`);
-              const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
-              if (urlResult) return { url: urlResult, debugInfo: debugLog };
-           }
-         } catch(e) { }
-       }
-       
-       // Fallback 2: Vreden (FB/IG/YT)
+       // Fallback 1: Ryzendesu API (IG/FB/TikTok)
        try {
-         const vredenHosts = ['https://api.vreden.my.id', 'https://api.vreden.web.id'];
-         const vredenPaths = isFb ? ['/api/fbdl', '/api/download/facebook'] : 
-                             isIg ? ['/api/igdl', '/api/download/instagram'] : 
-                             ['/api/ytdl', '/api/download/youtube'];
+         const rPath = isFb ? 'fbdl' : isIg ? 'igdl' : platform === 'tiktok' ? 'ttdl' : 'ytdl';
+         const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${rPath}?url=${encodeURIComponent(url)}`;
+         appendDebug(`Tentando Ryzendesu ${rPath}...`);
+         const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+         if (rRes.ok) {
+            const data: any = await rRes.json();
+            const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
+            if (urlResult) return { url: urlResult, debugInfo: debugLog };
+         }
+       } catch(e) { }
+       
+       // Fallback 2: Vreden & Outras APIs Agregadoras
+       try {
+         const vredenHosts = ['https://api.vreden.my.id', 'https://api.vreden.web.id', 'https://vreden.my.id'];
+         const vPaths = isFb ? ['/api/fbdl', '/api/download/facebook'] : 
+                        isIg ? ['/api/igdl', '/api/download/instagram'] : 
+                        platform === 'tiktok' ? ['/api/ttdl', '/api/tiktok'] :
+                        ['/api/ytdl', '/api/download/youtube', '/api/download/ytmp4'];
          
          for (const vHost of vredenHosts) {
-           for (const vPath of vredenPaths) {
+           for (const vPath of vPaths) {
              try {
                const vrUrl = `${vHost}${vPath}?url=${encodeURIComponent(url)}`;
-               appendDebug(`Tentando Vreden ${vHost}${vPath}...`);
                const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
                if (vRes.ok) {
                   const data: any = await vRes.json();
-                  const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video || data.data?.url || data.data?.video;
+                  const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video || data.data?.url || data.data?.video || data.result?.mp4;
                   if (urlResult) return { url: urlResult, debugInfo: debugLog };
                }
              } catch(e) {}
@@ -217,21 +215,16 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
          }
        } catch(e) { }
 
-       // Fallback 3: Delirius API
+       // Fallback 3: Delirius API (Muito estável para redes sociais)
        try {
-         let delPath = '';
-         if (isFb) delPath = '/download/facebook?url=';
-         else if (isIg) delPath = '/download/instagram?url=';
-         else if (platform === 'youtube') delPath = '/download/ytmp4?url=';
-         else if (platform === 'tiktok') delPath = '/download/tiktok?url=';
-         
-         if (delPath) {
-           const delUrl = `https://delirius-api-oficial.vercel.app${delPath}${encodeURIComponent(url)}`;
-           appendDebug(`Tentando Delirius...`);
+         const delPaths = isFb ? ['/download/facebook'] : isIg ? ['/download/instagram'] : platform === 'tiktok' ? ['/download/tiktok'] : ['/download/ytmp4'];
+         for (const dP of delPaths) {
+           const delUrl = `https://delirius-api-oficial.vercel.app${dP}?url=${encodeURIComponent(url)}`;
+           appendDebug(`Tentando Delirius ${dP}...`);
            const delRes = await fetch(delUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
            if (delRes.ok) {
               const data: any = await delRes.json();
-              const urlResult = data.data?.url || data.data?.media || data.result?.url || data.data?.video || data.result?.video;
+              const urlResult = data.data?.url || data.data?.media || data.result?.url || data.data?.video || data.result?.video || data.data?.download?.url;
               if (urlResult) return { url: urlResult, debugInfo: debugLog };
            }
          }

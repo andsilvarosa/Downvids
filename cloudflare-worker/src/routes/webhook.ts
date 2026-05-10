@@ -47,22 +47,30 @@ webhookRoute.post('/', async (c) => {
 
   await bot.sendMessage(chatId, '⏳ Baixando e processando mídia...');
 
-  const { url: mediaUrl, debugInfo } = await getDirectMediaUrl(targetUrl, c.env);
+  // Processar em segundo plano para não travar o webhook do Telegram
+  c.executionCtx.waitUntil((async () => {
+    try {
+      const { url: mediaUrl, debugInfo } = await getDirectMediaUrl(targetUrl, c.env);
 
-  if (!mediaUrl) {
-    await bot.sendMessage(chatId, `❌ Ops! Falha ao extrair vídeo deste link. O conteúdo pode ser privado ou não suportado.\n\n🛠 *Log de Debug:*\n\`\`\`${debugInfo}\`\`\``, { parse_mode: 'Markdown' });
-    return c.text('OK');
-  }
+      if (!mediaUrl) {
+        await bot.sendMessage(chatId, `❌ Ops! Falha ao extrair vídeo deste link. O conteúdo pode ser privado ou não suportado.\n\n🛠 *Log de Debug:*\n\`\`\`${debugInfo}\`\`\``, { parse_mode: 'Markdown' });
+        return;
+      }
 
-  const videoAttempt = await bot.sendVideo(chatId, mediaUrl);
-  
-  // O Telegram falha se o vídeo for >50mb ao tentar via URL (por Bot API direto)
-  if (!videoAttempt.ok) {
-    await bot.sendMessage(
-      chatId, 
-      `⚠️ O limite de tamanho do Telegram (50MB) foi excedido ou o formato não foi aceito nativamente.\n\nAqui está o link direto para baixar:\n${mediaUrl}`
-    );
-  }
+      const videoAttempt = await bot.sendVideo(chatId, mediaUrl);
+      
+      // O Telegram falha se o vídeo for >50mb ao tentar via URL (por Bot API direto)
+      if (!videoAttempt.ok) {
+        await bot.sendMessage(
+          chatId, 
+          `⚠️ O limite de tamanho do Telegram (50MB) foi excedido ou o formato não foi aceito nativamente.\n\nAqui está o link direto para baixar:\n${mediaUrl}`
+        );
+      }
+    } catch (error: any) {
+      console.error('Erro no processamento background:', error);
+      // Opcional: avisar o usuário que deu erro crítico
+    }
+  })());
 
   return c.text('OK');
 });
