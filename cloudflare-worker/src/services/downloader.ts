@@ -9,13 +9,15 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
     const host = env.RAPIDAPI_HOST.replace(/^https?:\/\//, ''); // Clean host just in case
     // Endpoints comuns em APIs de download no RapidAPI (Jakub Lipinski / outros)
-    const endpoints = ['/v1/social/autolink', '/social/autolink', '/all', '/main', '/get-info', '/api/v1/dl', '/download', '/api/video'];
+    const endpoints = ['/', '/all', '/main', '/get-video', '/download', '/api/video', '/api/youtube', '/v1/social/autolink', '/social/autolink', '/api/v1/dl'];
     appendDebug(`RapidAPI Host config: ${host}`);
     
     for (const endpoint of endpoints) {
       try {
         appendDebug(`Tentando RapidAPI endpoint: ${endpoint}`);
-        const isPost = endpoint === '/all' || endpoint === '/main' || host.includes('social-media-video-downloader');
+        // Forçar POST para hosts específicos que sabemos que funcionam assim
+        const isSocialDownloader = host.includes('social-media-video-downloader');
+        const isPost = endpoint === '/all' || endpoint === '/main' || endpoint === '/' || isSocialDownloader;
         const fetchUrl = `https://${host}${endpoint}`;
         
         // Tentar tanto POST com FORM quanto POST com JSON se for um endpoint de POST
@@ -249,12 +251,14 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   // 4. Fallback: Cobalt API Pública (VÁRIAS INSTÂNCIAS)
   try {
     const cobaltInstances = [
-      'https://api.cobalt.tools/',
-      'https://api.cobalt.codes/',
-      'https://cobalt.fast-api.tools/',
       'https://cobalt.asap.works/',
-      'https://cobalt.cloud/',
-      'https://api.cobalt.is/'
+      'https://cobalt.fast-api.tools/',
+      'https://api.cobalt.codes/',
+      'https://cobalt.hyonsu.com/',
+      'https://cobalt.disroot.org/',
+      'https://cobalt.q69.de/',
+      'https://api.cobalt.is/',
+      'https://cobalt.cloud/'
     ];
 
     appendDebug('Tentando instâncias do Cobalt...');
