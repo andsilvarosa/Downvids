@@ -8,14 +8,16 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   // 1. PRIORIDADE MÁXIMA: RapidAPI (Se configurada no Cloudflare)
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
     const host = env.RAPIDAPI_HOST.replace(/^https?:\/\//, ''); // Clean host just in case
-    const endpoints = ['/main', '/all', '/json', '/', '/api/v1/dl', '/download', '/api/video'];
+    // Endpoints comuns em APIs de download no RapidAPI
+    const endpoints = ['/', '/all', '/main', '/json', '/api/v1/dl', '/download', '/api/video'];
     appendDebug(`RapidAPI Host config: ${host}`);
     
     for (const endpoint of endpoints) {
       try {
-        appendDebug(`Tentando endpoints: ${endpoint}`);
-        // Usar POST para /all ou se for o host que o usuário indicou
-        const isPost = endpoint === '/all' || endpoint === '/main';
+        appendDebug(`Tentando RapidAPI endpoint: ${endpoint}`);
+        // Tenta detectar se a API prefere POST ou GET baseado no comportamento comum
+        // Muitas APIs do RapidAPI usam POST para /all ou /main
+        const isPost = endpoint === '/all' || endpoint === '/main' || host.includes('social-media-video-downloader');
         const fetchUrl = `https://${host}${endpoint}`;
         
         const res = await fetch(isPost ? fetchUrl : `${fetchUrl}?url=${encodeURIComponent(url)}`, {
@@ -26,23 +28,29 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             ...(isPost ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {})
           },
-          ...(isPost ? { body: `url=${encodeURIComponent(url)}&cookies=&cookies_file=` } : {})
+          ...(isPost ? { body: `url=${encodeURIComponent(url)}` } : {})
         });
+
         if (res.ok) {
           const data: any = await res.json();
-          appendDebug(`RapidAPI OK res: ${JSON.stringify(data).substring(0, 100)}...`);
+          appendDebug(`RapidAPI OK res (parcial): ${JSON.stringify(data).substring(0, 200)}...`);
+          
+          // Mapeamento exaustivo de possíveis chaves de retorno
           const candidates: any[] = [
              data.hd, data.data?.hd, data.result?.hd,
              data.play, data.data?.play, data.result?.play,
-             data.data?.medias?.[0]?.url, data.medias?.[0]?.url,
-             data.video, data.data?.video, data.result?.video,
-             data.video_url,
-             data.links?.[0]?.url, data.links?.[0]?.link,
-             data.data?.main_url,
              data.url, data.data?.url, data.result?.url,
              data.link, data.data?.link, data.result?.link,
-             data.direct_link, data.result?.mp4,
-             Array.isArray(data) ? data[0]?.url : null
+             data.video, data.data?.video, data.result?.video,
+             data.video_url, data.data?.video_url,
+             data.mp4, data.data?.mp4,
+             data.direct_link,
+             data.links?.[0]?.url, data.links?.[0]?.link,
+             data.data?.medias?.[0]?.url, data.medias?.[0]?.url,
+             data.result?.medias?.[0]?.url,
+             data.data?.main_url,
+             Array.isArray(data) ? data[0]?.url : null,
+             data.result?.mp4
           ].filter(Boolean);
 
           let mediaUrl = null;
@@ -51,9 +59,11 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
              if (typeof c === 'string' && c.startsWith('http')) {
                 const lowerUrl = c.toLowerCase();
                 let isValid = true;
+                // Evitar que a API retorne a própria URL de entrada como sendo o vídeo
                 if (platform === 'instagram' && (lowerUrl.includes('instagram.com/p/') || lowerUrl.includes('instagram.com/reel/'))) isValid = false;
                 if (platform === 'facebook' && (lowerUrl.includes('facebook.com/share/') || lowerUrl.includes('facebook.com/watch') || lowerUrl.includes('fb.watch/'))) isValid = false;
                 if (platform === 'tiktok' && (lowerUrl.includes('tiktok.com/@') || lowerUrl.includes('v.tiktok.com'))) isValid = false;
+                if (platform === 'youtube' && (lowerUrl.includes('youtube.com/') || lowerUrl.includes('youtu.be/'))) isValid = false;
                 
                 if (isValid) {
                    mediaUrl = c;
@@ -61,23 +71,19 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
                 }
              }
           }
-          if (!mediaUrl && candidates.length > 0) {
-              appendDebug(`(Recusado) URLs do JSON foram rejeitadas como sendo a URL original: ${candidates[0]}`);
-          }
 
           if (mediaUrl) {
+            appendDebug(`Sucesso RapidAPI: ${mediaUrl.substring(0, 50)}...`);
             return { url: mediaUrl, debugInfo: debugLog };
           } else {
-             appendDebug(`(Não achei URL no JSON do RapidAPI)`);
+             appendDebug(`Nenhuma URL válida encontrada no JSON do RapidAPI.`);
           }
         } else {
-           if (res.status !== 404) {
-             const txt = await res.text();
-             appendDebug(`RapidAPI ${endpoint} Fail: ${res.status} - ${txt.substring(0, 50)}`);
-           }
+          const txt = await res.text();
+          appendDebug(`RapidAPI ${endpoint} falhou: ${res.status} - ${txt.substring(0, 100)}`);
         }
       } catch (e: any) {
-         // ignore
+         appendDebug(`Erro ao chamar RapidAPI ${endpoint}: ${e.message}`);
       }
     }
   } else {
@@ -157,72 +163,94 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   }
 
   // 3. Outros Fallbacks (Facebook/Instagram/etc)
-  if (platform === 'facebook' || platform === 'instagram') {
+  if (platform === 'facebook' || platform === 'instagram' || platform === 'youtube') {
     try {
        const isFb = platform === 'facebook';
+       const isIg = platform === 'instagram';
        appendDebug(`Buscando fallbacks públicos para ${platform}...`);
        
-       // Fallback 1: Ryzendesu API
-       try {
-         const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${isFb ? 'fbdl' : 'igdl'}?url=${encodeURIComponent(url)}`;
-         appendDebug(`Tentando Ryzendesu...`);
-         const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-         if (rRes.ok) {
-            const data: any = await rRes.json();
-            const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
-            if (urlResult && !urlResult.includes('ryzendesu.vip/api/downloader')) { // Avoid HTML redirect trap
-               return { url: urlResult, debugInfo: debugLog };
-            }
-         }
-       } catch(e) {}
+       // Fallback 1: Ryzendesu API (IG/FB)
+       if (isFb || isIg) {
+         try {
+           const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${isFb ? 'fbdl' : 'igdl'}?url=${encodeURIComponent(url)}`;
+           appendDebug(`Tentando Ryzendesu...`);
+           const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+           if (rRes.ok) {
+              const data: any = await rRes.json();
+              appendDebug(`Ryzendesu res: ${JSON.stringify(data).substring(0, 100)}`);
+              const urlResult = data.url || data.video || (data.data && (data.data.url || data.data.video)) || (data.result && (data.result.url || data.result.hd || data.result.video));
+              if (urlResult && !urlResult.includes('ryzendesu.vip/api/downloader')) { 
+                 return { url: urlResult, debugInfo: debugLog };
+              }
+           } else {
+              appendDebug(`Ryzendesu falhou: ${rRes.status}`);
+           }
+         } catch(e) { appendDebug(`Erro Ryzendesu.`); }
+       }
        
-       // Fallback 2: Vreden
+       // Fallback 2: Vreden (FB/IG/YT)
        try {
-         const vrUrl = isFb 
-            ? `https://api.vreden.web.id/api/fbdl?url=${encodeURIComponent(url)}`
-            : `https://api.vreden.web.id/api/igdl?url=${encodeURIComponent(url)}`;
-         appendDebug(`Tentando Vreden...`);
-         const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-         if (vRes.ok) {
-            const data: any = await vRes.json();
-            const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video;
-            if (urlResult) return { url: urlResult, debugInfo: debugLog };
+         let vrUrl = '';
+         if (isFb) vrUrl = `https://api.vreden.web.id/api/fbdl?url=${encodeURIComponent(url)}`;
+         else if (isIg) vrUrl = `https://api.vreden.web.id/api/igdl?url=${encodeURIComponent(url)}`;
+         else if (platform === 'youtube') vrUrl = `https://api.vreden.web.id/api/ytdl?url=${encodeURIComponent(url)}`;
+
+         if (vrUrl) {
+           appendDebug(`Tentando Vreden...`);
+           const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+           if (vRes.ok) {
+              const data: any = await vRes.json();
+              appendDebug(`Vreden res: ${JSON.stringify(data).substring(0, 100)}`);
+              const urlResult = data.result?.hd || data.result?.sd || data.result?.url || data.result?.video || data.result?.mp4;
+              if (urlResult) return { url: urlResult, debugInfo: debugLog };
+           } else {
+              appendDebug(`Vreden falhou: ${vRes.status}`);
+           }
          }
-       } catch(e) {}
+       } catch(e) { appendDebug(`Erro Vreden.`); }
 
        // Fallback 3: Itzpire API
-       try {
-         const itzUrl = `https://itzpire.site/download/${isFb ? 'facebook' : 'instagram'}?url=${encodeURIComponent(url)}`;
-         appendDebug(`Tentando Itzpire...`);
-         const itzRes = await fetch(itzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-         if (itzRes.ok) {
-            const data: any = await itzRes.json();
-            const payload = data.data || data;
-            const urlResult = payload.video || payload.url;
-            if (urlResult) return { url: urlResult, debugInfo: debugLog };
-         }
-       } catch(e) {}
+       if (isFb || isIg) {
+         try {
+           const itzUrl = `https://itzpire.site/download/${isFb ? 'facebook' : 'instagram'}?url=${encodeURIComponent(url)}`;
+           appendDebug(`Tentando Itzpire...`);
+           const itzRes = await fetch(itzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+           if (itzRes.ok) {
+              const data: any = await itzRes.json();
+              appendDebug(`Itzpire res: ${JSON.stringify(data).substring(0, 100)}`);
+              const payload = data.data || data;
+              const urlResult = payload.video || payload.url;
+              if (urlResult) return { url: urlResult, debugInfo: debugLog };
+           } else {
+              appendDebug(`Itzpire falhou: ${itzRes.status}`);
+           }
+         } catch(e) { appendDebug(`Erro Itzpire.`); }
+       }
     } catch(e: any) {
         appendDebug(`Fallbacks públicos falharam: ${e.message}`);
     }
   }
 
-  // 4. Fallback: Cobalt API Pública
+  // 4. Fallback: Cobalt API Pública (VÁRIAS INSTÂNCIAS)
   try {
     const cobaltInstances = [
+      'https://api.cobalt.tools/',
       'https://cobalt.api.unv.is/',
-      'https://api.cobalt.tools/'
+      'https://cobalt.peroxis.workers.dev/',
+      'https://cobalt-api.v06.workers.dev/'
     ];
 
-    appendDebug('Tentando Cobalt...');
+    appendDebug('Tentando instâncias do Cobalt...');
 
     for (const apiUrl of cobaltInstances) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000); 
+        const timeoutId = setTimeout(() => controller.abort(), 8000); 
 
-        const isV10 = apiUrl === 'https://api.cobalt.tools/';
-        const reqUrl = isV10 ? apiUrl : apiUrl + 'api/json';
+        const isV10 = apiUrl.includes('cobalt.tools');
+        const reqUrl = isV10 ? apiUrl : (apiUrl.endsWith('/') ? apiUrl + 'api/json' : apiUrl + '/api/json');
+
+        appendDebug(`>> Cobalt try: ${apiUrl}`);
 
         const response = await fetch(reqUrl, {
           method: 'POST',
@@ -233,8 +261,9 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
           },
           body: JSON.stringify({
             url: url,
-            vQuality: "480", 
-            filenameStyle: "pretty"
+            vQuality: "720", 
+            filenameStyle: "pretty",
+            downloadMode: "auto"
           }),
           signal: controller.signal
         });
@@ -242,7 +271,8 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-           appendDebug(`Cobalt ${apiUrl} error ${response.status}`);
+           const errTxt = await response.text();
+           appendDebug(`Cobalt ${apiUrl} error ${response.status}: ${errTxt.substring(0, 40)}`);
            continue;
         }
 
@@ -253,14 +283,14 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
           appendDebug(`Cobalt OK: ${apiUrl}`);
           return { url: resultUrl, debugInfo: debugLog };
         } else {
-           appendDebug(`Resposta Cobalt inválida: ${JSON.stringify(data).substring(0,50)}`);
+           appendDebug(`Resposta Cobalt sem URL: ${JSON.stringify(data).substring(0,50)}`);
         }
       } catch (e: any) {
-         appendDebug(`Cobalt falhou em ${apiUrl}.`);
+         appendDebug(`Cobalt falhou (timeout ou rede) em ${apiUrl}.`);
       }
     }
   } catch (error) {
-    appendDebug('Cobalt fallback error');
+    appendDebug('Cobalt fallback general error');
   }
 
   return { url: null, debugInfo: debugLog };
