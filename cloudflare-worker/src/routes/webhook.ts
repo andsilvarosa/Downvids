@@ -1,3 +1,4 @@
+import { truncate } from '../utils/text';
 import { Hono } from 'hono';
 import { Bindings } from '../types';
 import { TelegramBot } from '../services/telegram';
@@ -53,7 +54,7 @@ webhookRoute.post('/', async (c) => {
       const { url: mediaUrl, debugInfo } = await getDirectMediaUrl(targetUrl, c.env);
 
       if (!mediaUrl) {
-        await bot.sendMessage(chatId, `❌ Ops! Falha ao extrair vídeo deste link. O conteúdo pode ser privado ou não suportado.\n\n🛠 *Log de Debug:*\n\`\`\`${debugInfo}\`\`\``, { parse_mode: 'Markdown' });
+        await bot.sendMessage(chatId, truncate(`❌ Ops! Falha ao extrair vídeo deste link. O conteúdo pode ser privado ou não suportado.\n\n🛠 *Log de Debug:*\n\`\`\`${debugInfo}\`\`\``, 4000), { parse_mode: 'Markdown' });
         return;
       }
 
@@ -64,12 +65,12 @@ webhookRoute.post('/', async (c) => {
         console.warn('sendVideo falhou ou arquivo muito grande, enviando link:', error.message);
         await bot.sendMessage(
           chatId, 
-          `⚠️ O limite de tamanho do Telegram (50MB) foi excedido ou o formato não foi aceito nativamente.\n\nAqui está o link direto para baixar:\n${mediaUrl}`
+          truncate(`⚠️ O limite de tamanho do Telegram (50MB) foi excedido ou o formato não foi aceito nativamente.\n\nAqui está o link direto para baixar:\n${mediaUrl}`, 4000)
         );
       }
     } catch (error: any) {
       console.error('Erro no processamento background:', error);
-      await bot.sendMessage(chatId, `❌ Ops! Ocorreu um erro interno ao processar o vídeo.\n\nDetalhe técnico: ${error.message}\n\nPor favor, tente novamente em alguns instantes.`);
+      await bot.sendMessage(chatId, truncate(`❌ Ops! Ocorreu um erro interno ao processar o vídeo.\n\nDetalhe técnico: ${error.message}\n\nPor favor, tente novamente em alguns instantes.`, 4000));
     }
   })());
 

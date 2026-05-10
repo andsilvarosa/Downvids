@@ -278,7 +278,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     for (const apiUrl of cobaltInstances) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout reduzido
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout reduzido
         const isV10 = apiUrl.includes('cobalt.tools');
         const reqUrl = isV10 ? apiUrl : (apiUrl.endsWith('/') ? apiUrl + 'api/json' : apiUrl + '/api/json');
 
