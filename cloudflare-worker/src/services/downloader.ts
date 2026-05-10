@@ -18,6 +18,22 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 5000) 
 export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ url: string | null, debugInfo: string }> {
   let debugLog = `[Debug Info para ${url}]\n`;
   const appendDebug = (msg: string) => { debugLog += msg + '\n'; };
+  
+  // Helper para expandir URL curta
+  async function expandUrl(targetUrl: string): Promise<string> {
+    try {
+        appendDebug(`Fazendo fetch de expansão em ${targetUrl}...`);
+        const res = await fetch(targetUrl, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0' } });
+        appendDebug(`Expandida para: ${res.url}`);
+        return res.url;
+    } catch(e: any) {
+      appendDebug(`Falha ao expandir URL: ${e.message}`);
+    }
+    return targetUrl;
+  }
+  
+  const expandedUrl = await expandUrl(url);
+  const platform = detectPlatform(expandedUrl);
 
   // 1. PRIORIDADE MÁXIMA: RapidAPI (Se configurada no Cloudflare)
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
@@ -46,7 +62,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
             
             appendDebug(`RapidAPI sub-tentativa: ${variant.method} ${subMethod}`);
             
-            const fetchUrl = isPost ? `https://${host}${endpoint}` : `https://${host}${endpoint}?url=${encodeURIComponent(url)}`;
+            const fetchUrl = isPost ? `https://${host}${endpoint}` : `https://${host}${endpoint}?url=${encodeURIComponent(expandedUrl)}`;
             const res = await fetchWithTimeout(fetchUrl, {
               method: variant.method,
               headers: {
@@ -56,8 +72,8 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
                 ...(variant.type === 'FORM' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
                 ...(variant.type === 'JSON' ? { 'Content-Type': 'application/json' } : {})
               },
-              ...(variant.type === 'FORM' ? { body: `url=${encodeURIComponent(url)}` } : {}),
-              ...(variant.type === 'JSON' ? { body: JSON.stringify({ url }) } : {}),
+              ...(variant.type === 'FORM' ? { body: `url=${encodeURIComponent(expandedUrl)}` } : {}),
+              ...(variant.type === 'JSON' ? { body: JSON.stringify({ url: expandedUrl }) } : {}),
               cf: { cacheEverything: false }
             });
 
@@ -76,7 +92,6 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
                     const val = obj[k];
                     if (typeof val === 'string' && val.startsWith('http')) {
                        const vLower = val.toLowerCase();
-                       const platform = detectPlatform(url);
                        // Ignorar se for a própria página original (algumas APIs retornam o input)
                        let looksValid = true;
                        if (platform === 'instagram' && vLower.includes('instagram.com/p/')) looksValid = false;
@@ -114,17 +129,14 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
      appendDebug(`RapidAPI_Key ou Host ausentes nas env vars.`);
   }
 
-  const platform = detectPlatform(url);
 
   // Helper para expandir URL curta
   async function expandUrl(targetUrl: string): Promise<string> {
     try {
-      if (targetUrl.includes('vt.tiktok.com') || targetUrl.includes('vm.tiktok.com')) {
         appendDebug(`Fazendo fetch de expansão em ${targetUrl}...`);
         const res = await fetch(targetUrl, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0' } });
         appendDebug(`Expandida para: ${res.url}`);
         return res.url;
-      }
     } catch(e: any) {
       appendDebug(`Falha ao expandir URL: ${e.message}`);
     }
@@ -134,7 +146,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   // 2. TikTok Especializado
   if (platform === 'tiktok') {
     try {
-      const fullUrl = await expandUrl(url);
+      const fullUrl = expandedUrl;
       appendDebug(`Tentando Tikwm com URL: ${fullUrl}`);
       const res = await fetchWithTimeout(`https://www.tikwm.com/api/?url=${encodeURIComponent(fullUrl)}`, {
         headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }
