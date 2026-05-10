@@ -13,6 +13,16 @@ app.route('/health', healthRoute);
 app.route('/webhook', webhookRoute);
 app.route('/setwebhook', setwebhookRoute);
 
+app.get('/debug', (c) => {
+  return c.json({
+    keys: Object.keys(c.env),
+    hasToken: !!c.env.TELEGRAM_BOT_TOKEN,
+    hasDB: !!c.env.DB,
+    hasRapidHost: !!c.env.RAPIDAPI_HOST,
+    hasRapidKey: !!c.env.RAPIDAPI_KEY
+  });
+});
+
 app.get('/test-dl', async (c) => {
   const url = c.req.query('url');
   if (!url) return c.json({ error: 'Missing url parameter' }, 400);
