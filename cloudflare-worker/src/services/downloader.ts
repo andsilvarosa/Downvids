@@ -8,8 +8,8 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   // 1. PRIORIDADE MÁXIMA: RapidAPI (Se configurada no Cloudflare)
   if (env.RAPIDAPI_KEY && env.RAPIDAPI_HOST) {
     const host = env.RAPIDAPI_HOST.replace(/^https?:\/\//, ''); // Clean host just in case
-    // Endpoints comuns em APIs de download no RapidAPI
-    const endpoints = ['/', '/all', '/main', '/json', '/get-info', '/social/autolink', '/v1/social/autolink', '/api/v1/dl', '/download', '/api/video', '/api/get-info', '/get-video'];
+    // Endpoints comuns em APIs de download no RapidAPI (Jakub Lipinski / outros)
+    const endpoints = ['/v1/social/autolink', '/social/autolink', '/all', '/main', '/get-info', '/api/v1/dl', '/download', '/api/video'];
     appendDebug(`RapidAPI Host config: ${host}`);
     
     for (const endpoint of endpoints) {
@@ -250,13 +250,11 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
   try {
     const cobaltInstances = [
       'https://api.cobalt.tools/',
-      'https://cobalt.api.unv.is/',
-      'https://cobalt.peroxis.workers.dev/',
-      'https://cobalt-api.v06.workers.dev/',
       'https://api.cobalt.codes/',
       'https://cobalt.fast-api.tools/',
       'https://cobalt.asap.works/',
-      'https://cobalt.cloud/'
+      'https://cobalt.cloud/',
+      'https://api.cobalt.is/'
     ];
 
     appendDebug('Tentando instâncias do Cobalt...');
@@ -264,8 +262,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
     for (const apiUrl of cobaltInstances) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); 
-
+        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout per cobalt instance
         const isV10 = apiUrl.includes('cobalt.tools');
         const reqUrl = isV10 ? apiUrl : (apiUrl.endsWith('/') ? apiUrl + 'api/json' : apiUrl + '/api/json');
 

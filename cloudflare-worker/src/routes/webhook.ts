@@ -8,6 +8,10 @@ import { isValidMediaUrl } from '../utils/validators';
 
 const webhookRoute = new Hono<{ Bindings: Bindings }>();
 
+webhookRoute.get('/', (c) => {
+  return c.text('🤖 Bot Webhook está ativo. Utilize o método POST para interagir com o Telegram.');
+});
+
 webhookRoute.post('/', async (c) => {
   const update: any = await c.req.json();
   
