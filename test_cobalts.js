@@ -9,24 +9,26 @@ const domains = [
 ];
 
 async function testCovalt() {
-   const expandedUrl = "https://www.facebook.com/share/v/18qSkTTRsD/";
-   for (let domain of domains) {
-     const url = `https://${domain}`;
-     try {
-       const res = await fetch(url, {
-         method: 'POST',
-         headers: {
-           'Accept': 'application/json',
-           'Content-Type': 'application/json'
-         },
-         signal: AbortSignal.timeout(3000),
-         body: JSON.stringify({ url: expandedUrl })
-       });
-       console.log(domain, res.status, await res.text().catch(()=>''));
-     } catch(e) {
-       //console.error(domain, e.message);
-     }
-   }
+    const expandedUrl = "https://www.facebook.com/share/v/18qSkTTRsD/";
+    console.log("Scanning cobalt instances for FB link with full error logging...");
+    for (let domain of domains) {
+      const url = `https://${domain}`;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          signal: AbortSignal.timeout(3000),
+          body: JSON.stringify({ url: expandedUrl })
+        });
+        const text = await res.text();
+        console.log(`Success domain ${domain} returned status: ${res.status} snippet: ${text.slice(0, 100)}`);
+      } catch(e) {
+        console.log(`Failed domain ${domain}: ${e.message}`);
+      }
+    }
 }
 
 testCovalt();

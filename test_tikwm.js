@@ -1,12 +1,9 @@
 async function test() {
   const url = "https://www.tiktok.com/@mrbeast/video/7338573278546562337";
   try {
-    console.log("Calling lovetik:", url);
-    const res = await fetch('https://lovetik.com/api/ajax/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'User-Agent': 'Mozilla/5.0' },
-      body: `query=${encodeURIComponent(url)}`
-    });
+    const tikwmUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`;
+    console.log("Calling tikwm:", tikwmUrl);
+    const res = await fetch(tikwmUrl);
     console.log("Status:", res.status);
     const data = await res.json();
     console.log("Data:", JSON.stringify(data).substring(0, 500));
