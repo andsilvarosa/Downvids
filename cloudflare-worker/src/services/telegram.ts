@@ -1,11 +1,11 @@
 export class TelegramBot {
   constructor(private token: string) {}
 
-  async sendMessage(chatId: number, text: string) {
+  async sendMessage(chatId: number, text: string, options: any = {}) {
     const response = await fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text })
+      body: JSON.stringify({ chat_id: chatId, text, ...options })
     });
     if (!response.ok) {
        const err = await response.text();

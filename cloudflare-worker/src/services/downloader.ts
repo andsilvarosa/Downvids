@@ -208,7 +208,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
        // Fallback 1: Ryzendesu API (IG/FB/TikTok)
        try {
          const rPath = isFb ? 'fbdl' : isIg ? 'igdl' : platform === 'tiktok' ? 'ttdl' : 'ytdl';
-         const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${rPath}?url=${encodeURIComponent(url)}`;
+         const ryzUrl = `https://api.ryzendesu.vip/api/downloader/${rPath}?url=${encodeURIComponent(expandedUrl)}`;
          appendDebug(`Tentando Ryzendesu ${rPath}...`);
          const rRes = await fetch(ryzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
          if (rRes.ok) {
@@ -229,7 +229,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
          for (const vHost of vredenHosts) {
            for (const vPath of vPaths) {
              try {
-               const vrUrl = `${vHost}${vPath}?url=${encodeURIComponent(url)}`;
+               const vrUrl = `${vHost}${vPath}?url=${encodeURIComponent(expandedUrl)}`;
                const vRes = await fetch(vrUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
                if (vRes.ok) {
                   const data: any = await vRes.json();
@@ -245,7 +245,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
        try {
          const delPaths = isFb ? ['/download/facebook'] : isIg ? ['/download/instagram'] : platform === 'tiktok' ? ['/download/tiktok'] : ['/download/ytmp4'];
          for (const dP of delPaths) {
-           const delUrl = `https://delirius-api-oficial.vercel.app${dP}?url=${encodeURIComponent(url)}`;
+           const delUrl = `https://delirius-api-oficial.vercel.app${dP}?url=${encodeURIComponent(expandedUrl)}`;
            appendDebug(`Tentando Delirius ${dP}...`);
            const delRes = await fetch(delUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
            if (delRes.ok) {
@@ -260,7 +260,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
        if (isFb || isIg || platform === 'tiktok' || platform === 'youtube') {
          try {
            let itzPath = isFb ? 'facebook' : isIg ? 'instagram' : platform === 'tiktok' ? 'tiktok' : 'youtube';
-           const itzUrl = `https://itzpire.site/download/${itzPath}?url=${encodeURIComponent(url)}`;
+           const itzUrl = `https://itzpire.site/download/${itzPath}?url=${encodeURIComponent(expandedUrl)}`;
            appendDebug(`Tentando Itzpire...`);
            const itzRes = await fetch(itzUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
            if (itzRes.ok) {
@@ -304,7 +304,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
           },
           body: JSON.stringify({
-            url: url,
+            url: expandedUrl,
             videoQuality: "720", 
             filenameStyle: "pretty",
             downloadMode: "auto"
@@ -324,7 +324,7 @@ export async function getDirectMediaUrl(url: string, env: Bindings): Promise<{ u
               const retryRes = await fetchWithTimeout(reqUrl, {
                 method: 'POST',
                 headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url })
+                body: JSON.stringify({ url: expandedUrl })
               });
               if (retryRes.ok) {
                  const retryData: any = await retryRes.json();
